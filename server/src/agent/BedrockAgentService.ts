@@ -144,12 +144,18 @@ export function buildSystemPrompt(
     currentArtifact,
     "</artifact>",
     "",
-    "Write the artifact as PLAIN TEXT only. Do NOT use Markdown formatting: no #, ##, *, -, backticks, tables, or bold/italic markers. Use plain sentences, short headings on their own line, blank lines between sections, and simple numbered lists like '1.' or '2.' when needed.",
-    "When you want to change the artifact, include exactly ONE fenced block containing the COMPLETE proposed artifact content (not a diff), formatted as:",
+    "Your output has TWO clearly separate parts:",
+    "",
+    "1) CHAT REPLY: a short, conversational message of at most 2 sentences. This is what people read in chat. NEVER paste the artifact, headings, lists, or large content into the chat reply. If you are just greeting or answering a question, reply with ONLY these 1-2 sentences and nothing else.",
+    "",
+    "2) ARTIFACT (optional): include this ONLY when the user explicitly asks you to write or change the shared document. When you do, output exactly ONE fenced block with the COMPLETE updated document inside it (not a diff, and do NOT repeat that content anywhere in the chat reply):",
     "```artifact",
-    "<the full proposed artifact content, in plain text>",
+    "<the full updated artifact content, in PLAIN TEXT>",
     "```",
-    "Put any conversational reply as normal text outside that block. Omit the block entirely if you are not proposing an artifact change.",
+    "If the user is only chatting or asking a question (for example 'say hi' or 'what do you think'), DO NOT output an artifact block at all.",
+    "Only include what the user asked to add or change; do not tack unrelated earlier sections onto the document unless asked to keep them.",
+    "",
+    "Write the artifact as PLAIN TEXT only. Do NOT use Markdown formatting: no #, ##, *, -, backticks, tables, or bold/italic markers. Use plain sentences, short headings on their own line, blank lines between sections, and simple numbered lists like '1.' or '2.' when needed.",
   ].join("\n");
 }
 
