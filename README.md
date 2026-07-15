@@ -3,7 +3,7 @@
 A real-time collaborative workspace where **multiple humans and one or more AI agents** work together as teammates to develop an idea and produce a concrete, exportable artifact (a plan, PRD, issue, workflow, pitch, or checklist). AI teammates are first-class participants: they share the same document, observe the same context, and contribute directly to the collaborative work product.
 
 > **Live demo:** http://13.220.41.228/ (AWS EC2, us-east-1 — temporary demo instance)
-> Demo video: **_add your 30–60s video link here_**
+
 
 ## What it does
 
