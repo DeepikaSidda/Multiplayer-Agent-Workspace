@@ -1,14 +1,15 @@
 # Auto-deploy to the EC2 instance on every push to main.
 #
 # One-time setup — add these GitHub repo secrets (Settings → Secrets → Actions):
-#   EC2_HOST         public DNS or IP of the instance
+#   EC2_HOST         public IP/DNS of the instance (e.g. 13.220.41.228)
 #   EC2_USER         ssh user (Amazon Linux: ec2-user)
-#   EC2_SSH_KEY      the PRIVATE key (contents of your .pem) for that instance
+#   EC2_SSH_KEY_B64  the private key, base64-encoded to a SINGLE line
+#                    (Windows PowerShell, copies it to your clipboard):
+#                      [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\maw-key-lf.pem")) | Set-Clipboard
 #   AWS_REGION       e.g. us-east-1  (enables the Bedrock agent)
 #
-# The instance must already have Docker + git (the ec2-userdata.sh bootstrap
-# installs them) and this repo cloned at /opt/maw. This workflow pulls, rebuilds,
-# and restarts the container.
+# Using a base64 single-line secret avoids the multiline / CRLF problems that
+# break SSH key parsing when a PEM is pasted directly.
 
 name: Deploy to EC2
 
@@ -26,30 +27,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 20m
-          script: |
-            set -euxo pipefail
-            REPO_DIR=/opt/maw
-            if [ ! -d "$REPO_DIR/.git" ]; then
-              sudo rm -rf "$REPO_DIR"
-              sudo git clone "https://github.com/${{ github.repository }}.git" "$REPO_DIR"
-              sudo chown -R "$USER" "$REPO_DIR"
-            fi
-            cd "$REPO_DIR"
-            git fetch --all
-            git reset --hard origin/main
-            docker build -t maw:latest .
-            docker rm -f maw 2>/dev/null || true
-            mkdir -p /opt/maw-data
-            docker run -d --name maw --restart always -p 80:8787 \
-              -e AWS_REGION="${{ secrets.AWS_REGION }}" \
-              -e BEDROCK_REGION="${{ secrets.AWS_REGION }}" \
-              -v /opt/maw-data:/data \
-              maw:latest
-            sleep 3
-            curl -fsS http://localhost/health
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "$EC2_SSH_KEY_B64" | base64 -d > key.pem
+          chmod 600 key.pem
+
+          ssh -i key.pem \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=30 \
+            "$EC2_USER@$EC2_HOST" \
+            "AWS_REGION='$AWS_REGION' REPO='$REPO' bash -s" <<'REMOTE'
+          set -euxo pipefail
+          REPO_DIR=/opt/maw
+          if [ ! -d "$REPO_DIR/.git" ]; then
+            sudo rm -rf "$REPO_DIR"
+            sudo git clone "https://github.com/$REPO.git" "$REPO_DIR"
+            sudo chown -R "$(whoami)" "$REPO_DIR"
+          fi
+          cd "$REPO_DIR"
+          git fetch --all
+          git reset --hard origin/main
+          docker build -t maw:latest .
+          docker rm -f maw 2>/dev/null || true
+          mkdir -p /opt/maw-data
+          docker run -d --name maw --restart always -p 80:8787 \
+            -e AWS_REGION="$AWS_REGION" \
+            -e BEDROCK_REGION="$AWS_REGION" \
+            -v /opt/maw-data:/data \
+            maw:latest
+          sleep 3
+          curl -fsS http://localhost/health
+          REMOTE
