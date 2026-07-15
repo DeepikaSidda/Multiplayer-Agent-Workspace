@@ -52,6 +52,9 @@ export function MessageLog({ messages }: MessageLogProps) {
             data-message-kind={message.kind}
           >
             <span className="message-sender">
+              <span className="message-avatar" aria-hidden="true">
+                {agentAuthored ? "🤖" : (message.senderName.trim()[0] ?? "?").toUpperCase()}
+              </span>
               {message.senderName}
               {agentAuthored && (
                 <span className="message-badge" aria-label="AI agent">

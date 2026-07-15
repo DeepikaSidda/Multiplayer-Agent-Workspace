@@ -157,8 +157,30 @@
       }
       .workspace-main > section > :first-child { margin-top: 0; }
 
-      section[aria-label]::before,
-      .workspace-chat::before, .workspace-agents::before, .workspace-artifact::before {}
+      /* Labeled panel headers so each column reads clearly. */
+      .workspace-main > section { position: relative; }
+      .workspace-chat::before,
+      .workspace-agents::before,
+      .workspace-artifact::before {
+        display: flex; align-items: center; gap: 0.45rem;
+        font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-faint);
+        padding-bottom: 0.6rem; margin-bottom: 0.7rem;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .workspace-chat::before { content: "💬  Conversation"; }
+      .workspace-agents::before { content: "🤖  AI Teammates"; }
+      .workspace-artifact::before { content: "📄  Shared Result"; }
+      /* The agent panel already renders its own title; hide the duplicate. */
+      .agent-manager-title { display: none; }
+      /* Colored top accent per panel. */
+      .workspace-main > section::after {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        border-radius: var(--radius) var(--radius) 0 0; opacity: 0.9;
+      }
+      .workspace-chat::after { background: linear-gradient(90deg, var(--accent), transparent); }
+      .workspace-agents::after { background: linear-gradient(90deg, var(--agent), transparent); }
+      .workspace-artifact::after { background: linear-gradient(90deg, var(--accent-2), transparent); }
 
       /* ============ Presence ============ */
       .presence-indicator { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
@@ -199,6 +221,13 @@
       .message-agent { align-self: flex-start; background: linear-gradient(180deg, rgba(53,208,165,0.13), rgba(53,208,165,0.05)); border-color: rgba(53,208,165,0.28); }
       .message-error { background: var(--danger-soft); border-color: rgba(255,107,117,0.35); }
       .message-sender { display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; font-weight: 700; color: var(--text-dim); letter-spacing: 0.01em; }
+      .message-avatar {
+        width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%;
+        display: grid; place-items: center; font-size: 0.66rem; font-weight: 800;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+      }
+      .message-agent .message-avatar { background: linear-gradient(135deg, var(--agent), #2bb591); }
+      .message-error .message-avatar { background: linear-gradient(135deg, var(--danger), #d64550); }
       .message-badge {
         font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
         padding: 0.05rem 0.4rem; border-radius: 999px; background: var(--agent-soft); color: var(--agent);
@@ -286,6 +315,7 @@
         transition: border-color 0.15s, box-shadow 0.15s;
       }
       .artifact-editor-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .artifact-editor-textarea::placeholder { color: var(--text-faint); opacity: 0.8; line-height: 1.6; }
 
       /* ============ Error banner ============ */
       .error-banner { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.5rem 0.9rem 0; }

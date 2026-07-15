@@ -100,6 +100,7 @@ export function ArtifactEditor({ text, artifactType }: ArtifactEditorProps) {
         className="artifact-editor-textarea"
         data-testid="artifact-editor"
         aria-label="Artifact plain text content"
+        placeholder="Your shared result appears here. Type to edit it together, or ask an agent to 'write' or 'update' it — e.g. @Nova write a plan for…"
         value={value}
         onChange={handleChange}
         rows={16}
