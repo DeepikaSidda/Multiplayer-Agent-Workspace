@@ -10,6 +10,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "build:deploy": "npm run build -w @maw/shared && npm run build -w @maw/server && npm run build:web -w @maw/client",
+    "start": "node server/dist/main.js",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

@@ -18,6 +18,9 @@
  */
 
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { SqliteWorkspaceStore } from "./store/index.js";
 import { WorkspaceService } from "./workspace/index.js";
@@ -28,6 +31,55 @@ import type { BedrockAgentService } from "./agent/index.js";
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? "maw.db";
 const REGION = process.env.BEDROCK_REGION ?? process.env.AWS_REGION;
+
+// Directory of the production client build (vite build output). Overridable via
+// WEB_ROOT; defaults to `client/dist-web` relative to this compiled file
+// (server/dist/main.js -> ../../client/dist-web).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WEB_ROOT = process.env.WEB_ROOT ?? path.resolve(__dirname, "../../client/dist-web");
+
+const CONTENT_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".map": "application/json; charset=utf-8",
+};
+
+/**
+ * Serve a static asset from the client build, with SPA fallback to index.html.
+ * Returns true if the request was handled. Path traversal is prevented by
+ * resolving within WEB_ROOT.
+ */
+function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+  if (!fs.existsSync(WEB_ROOT)) return false;
+  const urlPath = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+  const candidate = path.normalize(path.join(WEB_ROOT, urlPath));
+  // Reject anything that escapes WEB_ROOT.
+  if (!candidate.startsWith(WEB_ROOT)) {
+    res.writeHead(403);
+    res.end();
+    return true;
+  }
+
+  let filePath = candidate;
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    // SPA fallback: unknown routes render the app shell.
+    filePath = path.join(WEB_ROOT, "index.html");
+    if (!fs.existsSync(filePath)) return false;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  res.writeHead(200, { "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream" });
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
 
 async function buildAgentService(): Promise<BedrockAgentService | undefined> {
   if (!REGION) return undefined;
@@ -110,6 +162,11 @@ async function main(): Promise<void> {
           }
         })();
       });
+      return;
+    }
+
+    // Serve the built client (single-origin deploy) for any other GET request.
+    if (req.method === "GET" && serveStatic(req, res)) {
       return;
     }
 

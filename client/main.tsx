@@ -15,12 +15,14 @@ import { createRoot } from "react-dom/client";
 import { App, WorkspaceConnection } from "./dist/index.js";
 import type { ConnectionState } from "./dist/index.js";
 
-const SERVER_HTTP =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SERVER_HTTP ??
-  "http://localhost:8787";
+const ENV = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
+// Default to SAME-ORIGIN so the app works behind one address in production
+// (the server serves this build) and in dev (Vite proxies /api and /ws to the
+// server). Override with VITE_SERVER_HTTP / VITE_SERVER_WS if hosting split.
+const SERVER_HTTP = ENV.VITE_SERVER_HTTP ?? window.location.origin;
 const SERVER_WS =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SERVER_WS ??
-  "ws://localhost:8787/ws";
+  ENV.VITE_SERVER_WS ??
+  `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
 const ARTIFACT_TYPES = ["plan", "PRD", "issue", "workflow", "pitch", "checklist"] as const;
 
