@@ -52,6 +52,15 @@ function agentErrorMessage(error: ErrorPayload): string {
   }
 }
 
+/** Preset agent roles → the persona text sent to the model. */
+const ROLE_PRESETS: Record<string, string> = {
+  "Product Manager": "a pragmatic product manager who writes crisp PRDs and user stories",
+  "Software Engineer": "a senior software engineer who thinks about implementation, edge cases, and testing",
+  "Designer": "a product designer focused on UX, flows, and clear, simple copy",
+  "Critic": "a constructive critic who finds gaps, risks, and weak assumptions",
+  "Researcher": "a researcher who organizes findings and cites concrete points",
+};
+
 export function AgentManager({
   connection,
   participants,
@@ -61,6 +70,7 @@ export function AgentManager({
 }: AgentManagerProps) {
   const [displayName, setDisplayName] = useState("");
   const [persona, setPersona] = useState("");
+  const [role, setRole] = useState("");
 
   const agents = participants.filter((p) => p.type === "agent");
   const atCapacity = agents.length >= MAX_AGENTS_PER_WORKSPACE;
@@ -74,12 +84,16 @@ export function AgentManager({
     event.preventDefault();
     if (!canAdd) return;
     const trimmedPersona = persona.trim();
+    // Prefer an explicit persona; otherwise fall back to the selected role.
+    const effectivePersona =
+      trimmedPersona.length > 0 ? trimmedPersona : ROLE_PRESETS[role];
     connection.addAgent(
       displayName.trim(),
-      trimmedPersona.length > 0 ? trimmedPersona : undefined,
+      effectivePersona && effectivePersona.length > 0 ? effectivePersona : undefined,
     );
     setDisplayName("");
     setPersona("");
+    setRole("");
     onClearError?.();
   };
 
@@ -102,12 +116,26 @@ export function AgentManager({
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
         />
+        <select
+          className="agent-add-role"
+          aria-label="Agent role"
+          data-testid="agent-role-select"
+          value={role}
+          onChange={(event) => setRole(event.target.value)}
+        >
+          <option value="">Role (optional)…</option>
+          {Object.keys(ROLE_PRESETS).map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
         <input
           type="text"
           className="agent-add-persona"
           aria-label="Agent persona (optional)"
           data-testid="agent-persona-input"
-          placeholder="Persona (optional)"
+          placeholder="Custom persona (optional)"
           value={persona}
           onChange={(event) => setPersona(event.target.value)}
         />

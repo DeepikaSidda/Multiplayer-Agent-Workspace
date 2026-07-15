@@ -58,6 +58,9 @@ export function MessageLog({ messages }: MessageLogProps) {
                   {isError ? "⚠ agent" : "🤖 agent"}
                 </span>
               )}
+              <time className="message-time" dateTime={new Date(message.timestamp).toISOString()}>
+                {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </time>
             </span>
             <span className="message-content">{message.content}</span>
           </li>
