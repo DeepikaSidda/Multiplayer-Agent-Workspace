@@ -136,6 +136,7 @@ function successfulSnapshot(displayName: string): ServerToClientEvent {
 }
 
 beforeEach(() => {
+  window.localStorage.clear();
   window.history.replaceState(null, "", "/invite?source=test#missing-ref");
 });
 
@@ -187,10 +188,13 @@ describe("BrowserJoinController invite recovery", () => {
     beginInviteJoin(harness, submittedName);
 
     expect(harness.socket.joins()).toHaveLength(1);
-    expect(harness.socket.joins()[0].payload).toEqual({
-      joinReference: "missing-ref",
-      displayName: submittedName,
-    });
+    const joinPayload = harness.socket.joins()[0].payload;
+    expect(joinPayload.joinReference).toBe("missing-ref");
+    expect(joinPayload.displayName).toBe(submittedName);
+    // A stable participant id is minted and sent so a later reload rejoins as
+    // the same participant (idempotent) rather than creating a duplicate.
+    expect(typeof joinPayload.participantId).toBe("string");
+    expect((joinPayload.participantId as string).length).toBeGreaterThan(0);
 
     act(() => harness.socket.deliver(successfulSnapshot(submittedName)));
 
@@ -201,5 +205,35 @@ describe("BrowserJoinController invite recovery", () => {
     expect(screen.getByText(submittedName).textContent).toBe(submittedName);
     expect(screen.getByTestId("active-count").textContent).toContain("1 participant active");
     expect(harness.scheduledReconnect).not.toHaveBeenCalled();
+  });
+
+  it("auto-rejoins a remembered session on reload without re-prompting", () => {
+    // Simulate a prior successful join for this invite reference.
+    window.localStorage.setItem(
+      "maw:session:missing-ref",
+      JSON.stringify({ displayName: "Ada Lovelace", participantId: "participant-1" }),
+    );
+
+    const harness = makeHarness();
+    renderInvite(harness);
+    // No name prompt: a "Rejoining…" panel shows and the join is issued
+    // automatically on mount rather than the invite name form.
+    expect(screen.getByRole("heading", { name: "Rejoining…" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Join shared workspace" })).toBeNull();
+    act(() => harness.socket.open());
+
+    expect(screen.queryByRole("heading", { name: "You’ve been invited" })).toBeNull();
+    expect(harness.socket.joins()).toHaveLength(1);
+    expect(harness.socket.joins()[0].payload).toEqual({
+      joinReference: "missing-ref",
+      displayName: "Ada Lovelace",
+      participantId: "participant-1",
+    });
+
+    act(() => harness.socket.deliver(successfulSnapshot("Ada Lovelace")));
+
+    expect(
+      screen.getByRole("listitem", { name: "Ada Lovelace (human)" }),
+    ).toBeTruthy();
   });
 });

@@ -9,6 +9,12 @@ import {
   type CreateWorkspaceInput,
   type JoinWorkspaceInput,
 } from "./components/WorkspaceGate.js";
+import {
+  clearSession,
+  loadSession,
+  newParticipantId,
+  saveSession,
+} from "./sessionStore.js";
 
 export type WorkspaceConnectionFactory = (
   options: WorkspaceConnectionOptions,
@@ -41,7 +47,18 @@ export function BrowserJoinController({
   const [inviteReference, setInviteReference] = useState<string | null>(
     initialInviteReference,
   );
-  const [phase, setPhase] = useState<"creating" | "joining" | null>(null);
+  // A remembered session for an invite reference lets us rejoin on reload
+  // without re-prompting for a name and without creating a duplicate.
+  const rememberedInvite =
+    initialInviteReference !== null ? loadSession(initialInviteReference) : null;
+  const [phase, setPhase] = useState<"creating" | "joining" | null>(
+    rememberedInvite ? "joining" : null,
+  );
+  // True while silently rejoining a remembered session on load, so we show a
+  // brief "Rejoining…" panel instead of flashing the name-entry gate.
+  const [autoRejoining, setAutoRejoining] = useState<boolean>(
+    Boolean(rememberedInvite),
+  );
   const [error, setError] = useState("");
   const pendingConnection = useRef<WorkspaceConnection | null>(null);
 
@@ -54,8 +71,6 @@ export function BrowserJoinController({
     }
   };
 
-  useEffect(() => () => destroyPendingConnection(), []);
-
   const openConnection = (
     joinReference: string,
     displayName: string,
@@ -63,6 +78,12 @@ export function BrowserJoinController({
   ) => {
     destroyPendingConnection();
     setConnection(null);
+
+    // Persist identity so a reload rejoins as the same participant (idempotent
+    // on the server) instead of prompting again or duplicating the roster.
+    if (participantId) {
+      saveSession(joinReference, { displayName, participantId });
+    }
 
     const conn = connectionFactory({
       url: serverWs,
@@ -83,6 +104,7 @@ export function BrowserJoinController({
 
     // Subscribe before connect: a fake or fast server may reject immediately.
     unsubscribeError = conn.on("error", (payload) => {
+      setAutoRejoining(false);
       if (payload.code !== "WORKSPACE_NOT_FOUND" || settled) {
         setError(payload.message || "The workspace connection reported an error.");
         return;
@@ -93,6 +115,9 @@ export function BrowserJoinController({
       if (pendingConnection.current === conn) pendingConnection.current = null;
       conn.close();
       conn.destroy();
+      // A remembered session for a now-invalid reference must be forgotten so
+      // the next load shows the gate instead of looping on auto-rejoin.
+      clearSession(joinReference);
       setConnection((current) => (current === conn ? null : current));
       setPhase(null);
       setError(
@@ -106,10 +131,26 @@ export function BrowserJoinController({
       if (pendingConnection.current === conn) pendingConnection.current = null;
       setConnection(conn);
       setPhase(null);
+      setAutoRejoining(false);
       setError("");
     });
     conn.connect();
   };
+
+  // On load, if we opened an invite link we've joined before, rejoin
+  // automatically as the same participant — no name re-prompt, no duplicate.
+  useEffect(() => {
+    if (initialInviteReference && rememberedInvite) {
+      openConnection(
+        initialInviteReference,
+        rememberedInvite.displayName,
+        rememberedInvite.participantId,
+      );
+    }
+    return () => destroyPendingConnection();
+    // Run once on mount; openConnection/remembered values are stable here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCreate = async ({
     displayName,
@@ -149,14 +190,22 @@ export function BrowserJoinController({
       return;
     }
 
+    const reference = joinReference.trim();
+    // Reuse a prior identity for this workspace when present, otherwise mint a
+    // stable one, so a later reload rejoins as the same participant.
+    const participantId =
+      loadSession(reference)?.participantId ?? newParticipantId();
+
     setError("");
-    openConnection(joinReference.trim(), normalizedDisplayName);
+    openConnection(reference, normalizedDisplayName, participantId);
   };
 
   const handleExitInviteMode = () => {
     destroyPendingConnection();
+    if (initialInviteReference) clearSession(initialInviteReference);
     setConnection(null);
     setPhase(null);
+    setAutoRejoining(false);
     setError("");
     setInviteReference(null);
     if (clearInviteHash) {
@@ -171,6 +220,15 @@ export function BrowserJoinController({
   };
 
   if (connection) return <>{renderWorkspace(connection)}</>;
+
+  if (autoRejoining) {
+    return (
+      <div className="gate" data-mode="rejoining">
+        <h1>Rejoining…</h1>
+        <p className="sub">Reconnecting you to your workspace.</p>
+      </div>
+    );
+  }
 
   return (
     <WorkspaceGate
