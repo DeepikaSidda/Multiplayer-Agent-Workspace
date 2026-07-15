@@ -76,7 +76,23 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): boole
   }
 
   const ext = path.extname(filePath).toLowerCase();
-  res.writeHead(200, { "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream" });
+  // Cache policy: Vite emits content-hashed asset filenames (e.g.
+  // index-ABC123.js), so those are safe to cache aggressively. The HTML shell
+  // is NOT hashed and points at the current asset filenames, so it must never
+  // be served stale — otherwise a browser keeps loading an old bundle after a
+  // deploy and users only see updates on a hard refresh. Revalidate HTML every
+  // load so a normal refresh always picks up the latest app.
+  const isHtml = ext === ".html";
+  const isHashedAsset = filePath.includes(`${path.sep}assets${path.sep}`);
+  const cacheControl = isHtml
+    ? "no-cache, must-revalidate"
+    : isHashedAsset
+      ? "public, max-age=31536000, immutable"
+      : "no-cache";
+  res.writeHead(200, {
+    "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream",
+    "Cache-Control": cacheControl,
+  });
   fs.createReadStream(filePath).pipe(res);
   return true;
 }
