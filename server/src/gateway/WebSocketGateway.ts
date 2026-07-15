@@ -641,9 +641,28 @@ export class WebSocketGateway {
     const artifactSnapshot = await this.store.loadArtifact(workspaceId);
     if (artifactSnapshot === null) return null;
 
-    const participants: Participant[] = await this.store.loadParticipants(
+    const storedParticipants: Participant[] = await this.store.loadParticipants(
       workspaceId,
     );
+    // Reconcile the persisted roster against live presence. Human participants
+    // are session-bound: a stored `active` state from an earlier session that
+    // was never gracefully closed (e.g. a tab closed on an old build) must not
+    // linger as active in a fresh snapshot. Any human who is not currently
+    // connected in this room's presence is reported as `disconnected` so the
+    // client filters them out and the active count reflects only live sessions.
+    // Agents are durable teammates, not sessions, so their state is preserved.
+    const livePresence = this.roomManager.getPresence(workspaceId);
+    const participants: Participant[] = storedParticipants.map((p) => {
+      if (p.type === "agent") return p;
+      const liveState = livePresence?.getPresence(p.id) ?? null;
+      return {
+        ...p,
+        presenceState:
+          liveState !== null && liveState !== "disconnected"
+            ? liveState
+            : "disconnected",
+      };
+    });
     const messages: Message[] = await this.store.loadMessages(workspaceId);
 
     // Prefer the authoritative in-memory content (warmed via ensureRoom); fall
