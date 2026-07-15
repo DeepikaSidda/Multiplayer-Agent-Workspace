@@ -35,8 +35,12 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          echo "$EC2_SSH_KEY_B64" | base64 -d > key.pem
+          # Strip any whitespace/newlines the secret may have picked up when
+          # pasted, then decode. Guards against "error in libcrypto".
+          printf '%s' "$EC2_SSH_KEY_B64" | tr -d '[:space:]' | base64 -d > key.pem
           chmod 600 key.pem
+          # Fail early with a clear message if the key didn't decode to a valid key.
+          ssh-keygen -y -f key.pem > /dev/null || { echo "::error::EC2_SSH_KEY_B64 did not decode to a valid private key. Re-copy it with: [Convert]::ToBase64String([IO.File]::ReadAllBytes(\"\$env:USERPROFILE\\maw-key-lf.pem\")) | Set-Clipboard"; exit 1; }
 
           ssh -i key.pem \
             -o StrictHostKeyChecking=no \
