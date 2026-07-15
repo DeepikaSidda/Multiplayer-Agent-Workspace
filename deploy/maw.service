@@ -1,0 +1,18 @@
+# systemd unit for running the app WITHOUT Docker (Node installed on the host).
+# Install to /etc/systemd/system/maw.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now maw
+[Unit]
+Description=Multiplayer Agent Workspace
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/maw
+EnvironmentFile=/home/ec2-user/maw/.env
+ExecStart=/usr/bin/node server/dist/main.js
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
