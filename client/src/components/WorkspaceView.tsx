@@ -1,25 +1,14 @@
 /**
  * WorkspaceView — composes the presence, messaging, artifact editor, agent
  * management, and export UI over a connected {@link WorkspaceConnection}
- * (tasks 13.2 and 13.3).
- *
- * It wires the reactive {@link useWorkspaceConnection} state into the
- * presentational components:
- *  - {@link PresenceIndicator} (Requirements 2.1, 2.4, 2.5)
- *  - {@link MessageLog} + {@link MessageInput} (Requirements 3.4, 3.5, 3.6, 3.1/3.2, 8.2)
- *  - {@link ArtifactEditor} bound to the local `Y.Text` (Requirement 6.3)
- *  - {@link AgentManager} to add/remove/mention agents
- *    (Requirements 4.1, 4.4, 4.5, 4.6, 5.1)
- *  - {@link ExportControl} to export the artifact as Markdown
- *    (Requirements 7.1, 7.2, 7.4, 7.5)
- *  - {@link ErrorBanner} to surface artifact rejections and operation errors
- *    (Requirements 6.5, 8.4)
- *
- * The message composer is controlled here so the agent "Mention" affordance can
- * inject `@DisplayName ` into the draft (Requirement 5.1).
+ * (tasks 13.2 and 13.3), plus collaboration-signal enhancements:
+ *  - a live "agent is typing" indicator while an agent generates (presence
+ *    `processing`),
+ *  - an approve/reject banner when an agent edits the shared artifact, so a
+ *    human can Keep or Revert the agent's contribution.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceConnection } from "../WorkspaceConnection.js";
 import { useWorkspaceConnection } from "../useWorkspaceConnection.js";
 import { PresenceIndicator } from "./PresenceIndicator.js";
@@ -38,6 +27,13 @@ export interface WorkspaceViewProps {
   onCopyExport?: (markdown: string) => void | Promise<void>;
 }
 
+/** A pending agent artifact contribution awaiting human approval. */
+interface PendingAgentEdit {
+  agentName: string;
+  /** The artifact content immediately BEFORE the agent's edit (for Revert). */
+  before: string;
+}
+
 export function WorkspaceView({
   connection,
   onDownloadExport,
@@ -45,6 +41,12 @@ export function WorkspaceView({
 }: WorkspaceViewProps) {
   const view = useWorkspaceConnection(connection);
   const [draft, setDraft] = useState("");
+  const [pendingAgentEdit, setPendingAgentEdit] = useState<PendingAgentEdit | null>(null);
+
+  // Keep the latest roster in a ref so the artifact-review effect (attached
+  // once) can resolve an editor id → agent without re-subscribing constantly.
+  const participantsRef = useRef(view.participants);
+  participantsRef.current = view.participants;
 
   // Insert an `@DisplayName ` mention into the composer without clobbering any
   // text already typed, so a human can name/reply to a specific agent (Req 5.1).
@@ -56,6 +58,58 @@ export function WorkspaceView({
         : `${current} ${mention}`,
     );
   }, []);
+
+  // Detect agent edits to the shared artifact and surface an approve/reject
+  // banner. The connection applies each incoming update to the local Y.Text
+  // (firing the observer) BEFORE emitting the `artifactUpdate` event, so when
+  // the event names an agent editor we already have the pre-edit content.
+  useEffect(() => {
+    const text = connection.getText();
+    let previous = text.toString();
+    let lastBefore = previous;
+
+    const observer = () => {
+      lastBefore = previous;
+      previous = text.toString();
+    };
+    text.observe(observer);
+
+    const unsubscribe = connection.on("artifactUpdate", (payload) => {
+      const editor = participantsRef.current.find(
+        (p) => p.id === payload.lastEditorId,
+      );
+      if (editor && editor.type === "agent") {
+        setPendingAgentEdit({ agentName: editor.displayName, before: lastBefore });
+      }
+    });
+
+    return () => {
+      text.unobserve(observer);
+      unsubscribe();
+    };
+  }, [connection]);
+
+  const keepAgentEdit = useCallback(() => setPendingAgentEdit(null), []);
+
+  const revertAgentEdit = useCallback(() => {
+    setPendingAgentEdit((pending) => {
+      if (!pending) return null;
+      const text = connection.getText();
+      const restore = () => {
+        if (text.length > 0) text.delete(0, text.length);
+        if (pending.before.length > 0) text.insert(0, pending.before);
+      };
+      const doc = text.doc;
+      if (doc) doc.transact(restore);
+      else restore();
+      return null;
+    });
+  }, [connection]);
+
+  // Agents currently generating a response (presence `processing`).
+  const typingAgents = view.participants.filter(
+    (p) => p.type === "agent" && p.presenceState === "processing",
+  );
 
   return (
     <div className="workspace-view" data-connection-state={view.connectionState}>
@@ -81,6 +135,15 @@ export function WorkspaceView({
       <main className="workspace-main">
         <section className="workspace-chat" aria-label="Chat">
           <MessageLog messages={view.messages} />
+          {typingAgents.length > 0 && (
+            <div className="typing-indicator" role="status" data-testid="typing-indicator">
+              <span className="typing-dots" aria-hidden="true">
+                <span /><span /><span />
+              </span>
+              {typingAgents.map((a) => a.displayName).join(", ")}{" "}
+              {typingAgents.length === 1 ? "is" : "are"} generating…
+            </div>
+          )}
           <MessageInput
             connection={connection}
             rejection={view.lastMessageRejection}
@@ -101,6 +164,31 @@ export function WorkspaceView({
         </section>
 
         <section className="workspace-artifact" aria-label="Artifact">
+          {pendingAgentEdit && (
+            <div className="agent-review" role="status" data-testid="agent-review">
+              <span className="agent-review-text">
+                🤖 <strong>{pendingAgentEdit.agentName}</strong> updated the artifact.
+              </span>
+              <span className="agent-review-actions">
+                <button
+                  type="button"
+                  className="agent-review-keep"
+                  data-testid="agent-review-keep"
+                  onClick={keepAgentEdit}
+                >
+                  Keep
+                </button>
+                <button
+                  type="button"
+                  className="agent-review-revert"
+                  data-testid="agent-review-revert"
+                  onClick={revertAgentEdit}
+                >
+                  Revert
+                </button>
+              </span>
+            </div>
+          )}
           <ArtifactEditor
             text={connection.getText()}
             artifactType={view.artifactMeta?.artifactType ?? null}
