@@ -20,6 +20,12 @@ export {
 } from "./WorkspaceConnection.js";
 
 export { bytesToBase64, base64ToBytes, isBase64 } from "./codec.js";
+export { parseJoinReferenceHash } from "./joinReferenceHash.js";
+export {
+  BrowserJoinController,
+  type BrowserJoinControllerProps,
+  type WorkspaceConnectionFactory,
+} from "./BrowserJoinController.js";
 
 // React hook adapting the transport into reactive UI state (task 13.2).
 export {
@@ -49,3 +55,9 @@ export {
 export { AgentManager, type AgentManagerProps } from "./components/AgentManager.js";
 export { ExportControl, type ExportControlProps } from "./components/ExportControl.js";
 export { ErrorBanner, type ErrorBannerProps } from "./components/ErrorBanner.js";
+export {
+  WorkspaceGate,
+  type WorkspaceGateProps,
+  type CreateWorkspaceInput,
+  type JoinWorkspaceInput,
+} from "./components/WorkspaceGate.js";

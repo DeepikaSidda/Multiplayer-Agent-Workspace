@@ -211,9 +211,53 @@ Property-based tests use `fast-check` + Vitest, run a minimum of 100 iterations,
 - [x] 14. Final checkpoint - full system integration
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 15. Implement hash-driven join-reference invite entry
+  - [x] 15.1 Extract and integrate initial URL-hash join-reference parsing
+    - Add a pure, testable helper that removes the leading `#`, safely decodes percent-encoding, trims the decoded value, and treats an empty or malformed hash as no invite reference.
+    - Read the browser hash on initial load and preserve that parsed reference as the attempted invite target instead of repeatedly deriving it from mutable location state.
+    - Keep the existing manual join-reference input path available when the initial hash contains no usable reference.
+    - _Requirements: 1.3, 1.4, 1.6_
+
+  - [x] 15.2 Add an invite-specific gate and wire its join action
+    - Extract the gate into testable React component/controller seams rather than relying on browser-entry side effects.
+    - When an initial invite reference exists, render a focused gate that asks only for the participant display name and provides a clearly labeled `Join shared workspace` action; do not show workspace creation, artifact type, or manual reference controls in this mode.
+    - Submit the decoded, trimmed invite reference through `WorkspaceConnection`; when no invite reference exists, retain the current create flow and manual join-reference entry.
+    - Keep the joining state visible until a snapshot confirms entry to the shared workspace.
+    - _Requirements: 1.3, 1.4, 1.7_
+
+  - [x] 15.3 Add focused helper and gate component tests
+    - Cover plain, percent-encoded, whitespace-padded, empty, and malformed URL hashes with deterministic unit tests for the extracted parser.
+    - Cover invite mode showing only display name plus `Join shared workspace`, submitting the normalized reference, and no-hash mode retaining manual reference entry.
+    - _Requirements: 1.3, 1.4, 1.6, 1.7_
+
+- [x] 16. Recover cleanly from invalid invite references
+  - [x] 16.1 Handle `WORKSPACE_NOT_FOUND` as a terminal attempted-join failure
+    - Subscribe to structured connection errors before starting the attempted join so an immediate `WORKSPACE_NOT_FOUND` response cannot be missed.
+    - On `WORKSPACE_NOT_FOUND`, intentionally close and destroy the attempted `WorkspaceConnection`, cancel/suppress reconnect behavior, clear it from rendered workspace state, and return to the gate without adding or displaying workspace state.
+    - Show a useful not-found message and a clear recovery/back action that exits invite mode so the participant can use manual join-reference entry; preserve normal handling for unrelated connection errors.
+    - _Requirements: 1.4, 1.6, 1.7_
+
+  - [x] 16.2 Add invalid-invite cleanup and recovery tests
+    - Drive a fake connection/server error to verify `WORKSPACE_NOT_FOUND` closes and destroys the attempted connection, schedules no reconnect, returns to the gate, and displays the useful error.
+    - Verify the recovery/back action removes invite mode and restores manual join-reference entry, while a successful invite snapshot still enters the workspace and exposes current state.
+    - _Requirements: 1.4, 1.6, 1.7_
+
+- [x] 17. Validate the client join-reference experience
+  - [x] 17.1 Run the client TypeScript typecheck
+    - Run `npm run typecheck -w @maw/client` and fix any type errors introduced by the hash parser, gate extraction, connection cleanup, or recovery state.
+    - _Requirements: 1.3, 1.4, 1.6, 1.7_
+
+  - [x] 17.2 Run the client automated tests in non-watch mode
+    - Run `npm run test -w @maw/client` (the client script uses `vitest --run`) and fix any failing parser, gate, connection, or existing client regression tests.
+    - _Requirements: 1.3, 1.4, 1.6, 1.7_
+
+  - [x] 17.3 Run the production web build
+    - Run `npm run build:web -w @maw/client` and fix any production bundling or browser-entry integration failures.
+    - _Requirements: 1.3, 1.4, 1.6, 1.7_
+
 ## Notes
 
-- Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP.
+- Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP; tasks 15.3, 16.2, and 17.1–17.3 are intentionally required regression coverage and validation for the join-reference fix.
 - Each task references specific requirements for traceability, and each property test references its property from the design document.
 - Property-based tests use `fast-check` + Vitest, run a minimum of 100 iterations, and are tagged `// Feature: multiplayer-agent-workspace, Property {number}: {property_text}`.
 - The Bedrock Agent Service is exercised through a mock in agent-flow property tests (11, 12, 13); persistence properties (20, 21) use the in-memory store plus the failure-injecting decorator.
@@ -234,7 +278,14 @@ Property-based tests use `fast-check` + Vitest, run a minimum of 100 iterations,
     { "id": 7, "tasks": ["10.5", "10.6", "11.1"] },
     { "id": 8, "tasks": ["11.2", "13.1"] },
     { "id": 9, "tasks": ["13.2"] },
-    { "id": 10, "tasks": ["13.3"] }
+    { "id": 10, "tasks": ["13.3"] },
+    { "id": 11, "tasks": ["15.1"] },
+    { "id": 12, "tasks": ["15.2"] },
+    { "id": 13, "tasks": ["15.3", "16.1"] },
+    { "id": 14, "tasks": ["16.2"] },
+    { "id": 15, "tasks": ["17.1"] },
+    { "id": 16, "tasks": ["17.2"] },
+    { "id": 17, "tasks": ["17.3"] }
   ]
 }
 ```

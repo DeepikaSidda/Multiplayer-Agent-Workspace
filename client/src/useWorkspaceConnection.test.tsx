@@ -103,7 +103,7 @@ function message(id: string, seq: number, name = "Ada"): Message {
   };
 }
 
-function setup(): { connection: WorkspaceConnection; socket: FakeSocket } {
+function setup(displayName = "Ada"): { connection: WorkspaceConnection; socket: FakeSocket } {
   let socket: FakeSocket | null = null;
   const factory: SocketFactory = () => {
     socket = new FakeSocket();
@@ -112,7 +112,7 @@ function setup(): { connection: WorkspaceConnection; socket: FakeSocket } {
   const connection = new WorkspaceConnection({
     url: "ws://test",
     joinReference: "ref-1",
-    displayName: "Ada",
+    displayName,
     socketFactory: factory,
     reconnect: false,
   });
@@ -124,6 +124,21 @@ function setup(): { connection: WorkspaceConnection; socket: FakeSocket } {
 }
 
 describe("useWorkspaceConnection + WorkspaceView", () => {
+  it("displays the invitee's submitted name after a successful snapshot", () => {
+    const submittedName = "Ada Lovelace";
+    const { connection, socket } = setup(submittedName);
+    render(<WorkspaceView connection={connection} />);
+
+    const join = JSON.parse(socket.sent[0]) as { payload: { displayName: string } };
+    expect(join.payload.displayName).toBe(submittedName);
+
+    act(() => {
+      socket.deliver(snapshot([human("invitee-1", submittedName)], []));
+    });
+
+    expect(screen.getByLabelText(`${submittedName} (human)`)).toBeTruthy();
+  });
+
   it("renders the snapshot: presence, count, and messages", () => {
     const { connection, socket } = setup();
     render(<WorkspaceView connection={connection} />);

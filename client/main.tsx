@@ -12,7 +12,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { App, WorkspaceConnection } from "./dist/index.js";
+import {
+  App,
+  BrowserJoinController,
+  parseJoinReferenceHash,
+  WorkspaceConnection,
+} from "./dist/index.js";
 import type { ConnectionState } from "./dist/index.js";
 
 const ENV = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
@@ -24,117 +29,9 @@ const SERVER_WS =
   ENV.VITE_SERVER_WS ??
   `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
-const ARTIFACT_TYPES = ["plan", "PRD", "issue", "workflow", "pitch", "checklist"] as const;
-
-function Gate() {
-  const [connection, setConnection] = useState<WorkspaceConnection | null>(null);
-  const [displayName, setDisplayName] = useState("");
-  const [artifactType, setArtifactType] = useState<(typeof ARTIFACT_TYPES)[number]>("plan");
-  const [joinRef, setJoinRef] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const name = displayName.trim() || "Guest";
-
-  const openConnection = (joinReference: string, participantId?: string) => {
-    const conn = new WorkspaceConnection({
-      url: SERVER_WS,
-      joinReference,
-      displayName: name,
-      ...(participantId ? { participantId } : {}),
-    });
-    conn.connect();
-    setConnection(conn);
-  };
-
-  const handleCreate = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch(`${SERVER_HTTP}/api/workspaces`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ownerDisplayName: name, artifactType }),
-      });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const data = (await res.json()) as { joinReference: string; ownerId: string };
-      // Surface the shareable reference so others can join.
-      window.history.replaceState(null, "", `#${data.joinReference}`);
-      // Join as the recorded Owner so the creator isn't duplicated in the roster.
-      openConnection(data.joinReference, data.ownerId);
-    } catch (err) {
-      setError(
-        `Could not create a workspace. Is the server running on ${SERVER_HTTP}? (${String(err)})`,
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleJoin = () => {
-    const ref = joinRef.trim() || window.location.hash.replace(/^#/, "");
-    if (!ref) {
-      setError("Enter a join reference to join an existing workspace.");
-      return;
-    }
-    setError("");
-    openConnection(ref);
-  };
-
-  if (connection) {
-    return <WorkspaceShell connection={connection} />;
-  }
-
-  return (
-    <div className="gate">
-      <h1>Multiplayer Agent Workspace</h1>
-      <p className="sub">Create a shared room or join one with a reference.</p>
-
-      <label htmlFor="name">Your display name</label>
-      <input
-        id="name"
-        value={displayName}
-        placeholder="Ada"
-        onChange={(e) => setDisplayName(e.target.value)}
-      />
-
-      <div className="row">
-        <div>
-          <label htmlFor="type">Artifact type</label>
-          <select
-            id="type"
-            value={artifactType}
-            onChange={(e) => setArtifactType(e.target.value as typeof artifactType)}
-          >
-            {ARTIFACT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <button disabled={busy} onClick={handleCreate}>
-        {busy ? "Creating…" : "Create workspace"}
-      </button>
-
-      <p className="divider">— or join an existing one —</p>
-      <label htmlFor="ref">Join reference</label>
-      <input
-        id="ref"
-        value={joinRef}
-        placeholder="paste a reference (or use a #ref link)"
-        onChange={(e) => setJoinRef(e.target.value)}
-      />
-      <button className="secondary" onClick={handleJoin}>
-        Join workspace
-      </button>
-
-      <div className="err">{error}</div>
-    </div>
-  );
-}
+// Capture the initial invite target once. Later history/hash mutations (for
+// example after workspace creation) must not change which invite was opened.
+const INITIAL_INVITE_REFERENCE = parseJoinReferenceHash(window.location.hash);
 
 /** The connected app shell: brand top bar (status + share) over the workspace UI. */
 function WorkspaceShell({ connection }: { connection: WorkspaceConnection }) {
@@ -186,7 +83,19 @@ function WorkspaceShell({ connection }: { connection: WorkspaceConnection }) {
 
 function Root() {
   // Stable across renders.
-  return useMemo(() => <Gate />, []);
+  return useMemo(
+    () => (
+      <BrowserJoinController
+        initialInviteReference={INITIAL_INVITE_REFERENCE}
+        serverHttp={SERVER_HTTP}
+        serverWs={SERVER_WS}
+        renderWorkspace={(connection: WorkspaceConnection) => (
+          <WorkspaceShell connection={connection} />
+        )}
+      />
+    ),
+    [],
+  );
 }
 
 const container = document.getElementById("root");
