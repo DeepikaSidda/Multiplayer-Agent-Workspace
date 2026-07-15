@@ -1,67 +1,85 @@
 # Multiplayer Agent Workspace
 
-A real-time collaborative workspace where **multiple humans and one or more AI agents** work together as teammates to develop an idea and produce a concrete, exportable artifact (a plan, PRD, issue, workflow, pitch, or checklist). AI teammates are first-class participants: they share the same document, observe the same context, and contribute directly to the collaborative work product.
+A real-time collaborative room where **people and AI teammates work together** and leave with a finished, exportable result. Open a shared workspace, invite an AI teammate, think through an idea in chat, shape a shared result together, and export it as **PDF** or **Markdown**.
+
+Unlike a normal chatbot, the AI is a **first-class participant**: it joins the same room, sees the same conversation and shared content, and contributes directly alongside everyone else.
 
 > **Live demo:** http://13.220.41.228/ (AWS EC2, us-east-1 — temporary demo instance)
 
+---
 
-## What it does
+## Highlights
 
-- **Shared room** — humans and agents join the same workspace over WebSockets; presence, chat, and the artifact stay in sync in real time.
-- **AI teammates** — add an agent (powered by **Amazon Bedrock — Nova Pro**, `amazon.nova-pro-v1:0`), give it a persona/role, and `@mention` it. It responds using the full conversation and the current artifact as context.
-- **Co-created artifact** — humans and agents edit one shared Markdown document (a Yjs CRDT), so concurrent edits merge without losing work.
-- **Export** — produce the final Markdown artifact when you're done.
+- **Real-time multiplayer** — several people join the same room over WebSockets; presence and chat stay in sync within seconds.
+- **AI teammates** — add an agent powered by **Amazon Bedrock — Nova Pro** (`amazon.nova-pro-v1:0`), give it a role (Product Manager, Engineer, Designer, Critic, Researcher), and `@mention` it. It answers with the full context of the room.
+- **Shared result, co-created live** — humans and agents build one shared result together (a Yjs CRDT), so simultaneous edits merge without losing anyone's work. A **Keep / Revert** banner appears when an agent contributes.
+- **Chat vs. result, kept separate** — questions and brainstorming stay in chat; explicit "write / update" requests shape the shared result.
+- **Export** — download the final result as **PDF** or **Markdown**.
+- **Durable by default** — everything (participants, chat, shared result) persists in **DynamoDB**, so nothing is lost across reconnects, restarts, or redeploys.
+- **Easy invites** — share one link; invitees just enter a name to join, and a refresh rejoins them automatically without duplicates.
 
-## Collaboration signals demonstrated
+## How it works (at a glance)
 
-1. **A human adds an idea/comment/decision** into the shared workspace (chat + artifact editing).
-2. **An agent responds using shared workspace context** (complete message log + current artifact content).
-3. **An agent creates/updates a shared artifact** (proposed content is applied to the shared plan/PRD/etc.).
-4. **The user can edit / respond to the agent's contribution** (co-edit the artifact, reply in chat).
-5. **Two or more roles appear** (human + agent; multiple agent personas supported).
-6. **Visible history of human + agent contributions** (attributed, ordered, persisted message log).
-7. **A final output is generated from the collaborative process** (Export Markdown), not a single prompt.
+There are two areas in a workspace:
+
+- **Chat** — the conversation between people and AI teammates (discussion, questions, coordination).
+- **Shared result** — the thing you're actually building together, and what you export at the end.
+
+Say things like *"suggest…"* or *"what do you think"* to keep it in chat. Say *"write…"*, *"update it"*, or *"replace it with…"* to have the agent shape the shared result.
 
 ## Architecture
 
 - **`shared/`** — TypeScript domain types, constants, and the WebSocket event contract.
-- **`server/`** — Node.js + TypeScript. WebSocket gateway, per-room manager, and services for messaging, presence, the artifact CRDT (Yjs), export, and the Bedrock agent. Durable persistence via SQLite (`better-sqlite3`).
-- **`client/`** — React + TypeScript SPA. Presence, chat, a Markdown artifact editor bound to a local Yjs doc, agent management, and export controls.
+- **`server/`** — Node.js + TypeScript. WebSocket gateway, per-room manager, and services for messaging, presence, the shared-content CRDT (Yjs), export, and the Bedrock agent. Pluggable persistence via a `WorkspaceStore` interface with two backends: **DynamoDB** (default in production) and **SQLite** (local/dev).
+- **`client/`** — React + TypeScript single-page app. Presence, chat, a live shared-content editor bound to a local Yjs doc, agent management, and PDF/Markdown export.
+
+```
+Browser (React SPA)  <-- WebSocket -->  Node server (rooms, presence, CRDT, agent)
+                                              |                       |
+                                        DynamoDB / SQLite        Amazon Bedrock (Nova Pro)
+```
 
 ## Prerequisites
 
 - Node.js 18+ and npm
-- (Optional, for the AI agent) AWS credentials with Amazon Bedrock access to `amazon.nova-pro-v1:0`
+- (Optional, for the AI teammate) AWS credentials with Amazon Bedrock access to `amazon.nova-pro-v1:0`
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env   # then edit .env (Windows: copy .env.example .env)
+cp .env.example .env      # Windows: copy .env.example .env
 npm run build
 ```
 
-Set `AWS_REGION` in `.env` to enable the agent. Without it, the app still runs; `@mentioning` an agent just won't call a model.
+Set `AWS_REGION` in `.env` to enable the AI teammate. Without it the app still runs; `@mentioning` an agent just won't call a model.
 
-## Run
-
-Open two terminals from the repo root:
+## Run locally
 
 ```bash
-# Terminal 1 — server (HTTP + WebSocket on :8787)
+# Terminal 1 — server (HTTP + WebSocket on :8787), SQLite by default
 npm run start -w @maw/server
 
-# Terminal 2 — client dev server (http://localhost:5173)
+# Terminal 2 — client dev server
 npm run dev -w @maw/client
 ```
 
-Then open http://localhost:5173:
+Then:
 
-1. Enter a display name, choose an artifact type, and **Create workspace**.
-2. Add an agent (e.g. `Nova`), then send `@Nova draft a plan for ...`.
-3. Watch the agent reply and update the shared artifact; edit it together.
-4. **Share link** (top bar) to collaborate with a second browser/person.
-5. **Export Markdown** for the final output.
+1. Enter a display name, pick a result type, and **Create workspace**.
+2. Add an AI teammate (e.g. `Nova`) and send `@Nova write a plan for ...`.
+3. Watch it reply in chat and shape the shared result; edit it together.
+4. **Share link** (top bar) to bring in a second person/browser.
+5. **Export PDF** or **Export Markdown** for the final output.
+
+## Persistence backends
+
+The server selects a store via the `STORE` env var:
+
+| `STORE`  | Backend  | Notes |
+|----------|----------|-------|
+| `dynamo` | DynamoDB | Managed and durable; used in production. Single table (`MAW_DYNAMO_TABLE`, default `maw`) with a `GSI1` index for join-reference lookups. |
+| `sqlite` | SQLite   | Default for local/dev. File at `DB_PATH` (default `maw.db`). |
 
 ## Testing
 
@@ -70,7 +88,7 @@ npm test          # all packages
 npm run typecheck # type-check all packages
 ```
 
-The server suite includes **21 property-based tests** (fast-check, ≥100 iterations each) covering message validation/ordering, ID uniqueness, artifact size limits, CRDT convergence, agent orchestration/rollback, export completeness, and persistence round-trips.
+The suite includes **21 property-based tests** (fast-check, ≥100 iterations each) covering message validation/ordering, ID uniqueness, size limits, CRDT convergence, agent orchestration/rollback, export completeness, and persistence round-trips — plus example and UI tests. Current totals: **193 server tests** and **50 client tests**.
 
 ## Environment variables
 
@@ -79,21 +97,23 @@ See [`.env.example`](./.env.example). Key variables:
 | Variable | Scope | Purpose |
 |---|---|---|
 | `PORT` | server | HTTP/WebSocket port (default `8787`) |
-| `DB_PATH` | server | SQLite file path (default `maw.db`) |
+| `STORE` | server | `dynamo` or `sqlite` (default `sqlite`) |
+| `MAW_DYNAMO_TABLE` / `MAW_DYNAMO_REGION` | server | DynamoDB table and region when `STORE=dynamo` |
+| `DB_PATH` | server | SQLite file path when `STORE=sqlite` (default `maw.db`) |
 | `AWS_REGION` / `BEDROCK_REGION` | server | Enables the Nova Pro agent when set |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_PROFILE` | server | AWS credentials (via the standard SDK provider chain) |
-| `VITE_SERVER_HTTP` / `VITE_SERVER_WS` | client | Override the server URLs if not on localhost:8787 |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_PROFILE` | server | AWS credentials (standard SDK provider chain; the EC2 IAM role is used in production) |
+| `VITE_SERVER_HTTP` / `VITE_SERVER_WS` | client | Override the server URLs if not same-origin |
 
 No real secrets are committed; `.env` is git-ignored.
 
+## Deployment
+
+Pushes to `main` auto-deploy to EC2 via GitHub Actions (`.github/workflows/deploy.yml`): build the Docker image, restart the container, and health-check `/health`. The container runs with `STORE=dynamo`, and the EC2 instance role grants Bedrock + DynamoDB access.
+
 ## How Kiro was used
 
-See [the "Kiro / agentic development" section below](#kiro--agentic-development).
+This project was built with **Kiro's spec-driven workflow**, not one-shot prompting. Starting from a rough idea, Kiro guided it through three reviewed artifacts under `.kiro/specs/multiplayer-agent-workspace/`: a **requirements** document (EARS-style acceptance criteria across 8 requirements), a **design** document (architecture, component interfaces, data models, and 21 formal correctness properties), and a dependency-ordered **tasks** list.
 
-## Kiro / agentic development
+Implementation ran as **agentic, spec-driven task execution**: Kiro worked through the task list wave by wave, delegating each task to a focused sub-agent that wrote the code and then ran the build and tests before moving on. A core principle was **property-based testing** — the design fixed executable correctness properties (e.g. "concurrent edits converge and preserve every committed edit," "size limit is never exceeded," "persistence failure is transactional"), each implemented as a fast-check property running ≥100 iterations. This caught edge cases example tests miss and gave objective evidence the system meets its spec.
 
-This project was built with **Kiro's spec-driven workflow**, not one-shot prompting. I started from a rough idea and Kiro guided it through three ground-truth artifacts under `.kiro/specs/multiplayer-agent-workspace/`: a **requirements** document (EARS-style acceptance criteria across 8 requirements), a **design** document (architecture, component interfaces, data models, and 21 formal correctness properties), and a dependency-ordered **tasks** list. Each phase was reviewed before moving on, so the design stayed anchored to real requirements.
-
-Implementation was executed as **agentic, spec-driven task runs**. Kiro worked through the task list wave by wave, delegating each task to a focused sub-agent that wrote the code, then ran the build and tests before the next task began. A core principle was **property-based testing**: the design fixed executable correctness properties (e.g. "concurrent edits converge and preserve every committed edit," "artifact size limit is never exceeded," "persistence failure is transactional"), and each was implemented as a fast-check property running ≥100 iterations. This caught edge cases traditional example tests miss and gave objective evidence the system meets its spec — the suite runs 225 tests green.
-
-Kiro also handled the "last mile": wiring runnable server/client entrypoints, diagnosing a duplicate-participant bug (verified with a reproduction script, then fixed by threading a stable participant id through the join flow), and iterating on the UI. Treating specs and correctness properties as the source of truth kept the agentic development loop reliable rather than ad hoc.
+Kiro also handled the "last mile" iteratively: wiring runnable entrypoints, fixing a duplicate-participant bug, adding a smooth invite/rejoin flow, switching persistence to DynamoDB, adding PDF export, keeping the agent's chat reply separate from the shared result, and rehydrating agents after restarts — each change validated and deployed. Treating the specs and correctness properties as the source of truth kept the loop reliable rather than ad hoc.
