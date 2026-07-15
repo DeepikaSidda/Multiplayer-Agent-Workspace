@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@maw/shared": "*",
+    "jspdf": "^2.5.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "yjs": "^13.6.18"
