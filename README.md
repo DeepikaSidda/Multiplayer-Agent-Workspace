@@ -4,6 +4,8 @@ A real-time collaborative room where **people and AI teammates work together** a
 
 Unlike a normal chatbot, the AI is a **first-class participant**: it joins the same room, sees the same conversation and shared content, and contributes directly alongside everyone else.
 
+![Multiplayer Agent Workspace poster](Screenshots/poster.png)
+
 > **Live demo (join directly):** http://13.220.41.228/#7b62331d-5653-42c6-9022-73cffae8ea5c — just enter a name to join the shared workspace.
 
 ---
@@ -26,6 +28,12 @@ There are two areas in a workspace:
 - **Shared result** — the thing you're actually building together, and what you export at the end.
 
 Say things like *"suggest…"* or *"what do you think"* to keep it in chat. Say *"write…"*, *"update it"*, or *"replace it with…"* to have the agent shape the shared result.
+
+## Screenshots
+
+People and an AI teammate collaborating in a shared workspace — chat on the left, AI teammates in the middle, and the shared result on the right:
+
+![A collaborative conversation in the workspace](Screenshots/screenshot-of-a-conversation.png)
 
 ## Architecture
 
