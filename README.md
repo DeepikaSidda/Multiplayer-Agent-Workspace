@@ -4,7 +4,7 @@ A real-time collaborative room where **people and AI teammates work together** a
 
 Unlike a normal chatbot, the AI is a **first-class participant**: it joins the same room, sees the same conversation and shared content, and contributes directly alongside everyone else.
 
-> **Live demo:** http://13.220.41.228/ (AWS EC2, us-east-1 — temporary demo instance)
+> **Live demo (join directly):** http://13.220.41.228/#7b62331d-5653-42c6-9022-73cffae8ea5c — just enter a name to join the shared workspace. (AWS EC2, us-east-1 — temporary demo instance)
 
 ---
 
