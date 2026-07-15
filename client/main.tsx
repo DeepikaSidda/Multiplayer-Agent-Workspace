@@ -65,7 +65,16 @@ function WorkspaceShell({ connection }: { connection: WorkspaceConnection }) {
     <div className="shell">
       <div className="topbar">
         <div className="brand">
-          <span className="logo">◆</span>
+          <span className="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" role="img" aria-label="Agent Workspace">
+              <path
+                fill="#ffffff"
+                d="M12 2.2c-3.8 0-6.8 3.1-6.8 6.9v10.7c0 .7.8 1 1.3.5l1.3-1.3c.3-.3.8-.3 1.1 0l1.2 1.2c.3.3.8.3 1.1 0l1.2-1.2c.3-.3.8-.3 1.1 0l1.2 1.2c.3.3.8.3 1.1 0l1.3 1.3c.5.5 1.3.2 1.3-.5V9.1c0-3.8-3-6.9-6.8-6.9z"
+              />
+              <ellipse cx="9.6" cy="10.2" rx="1.25" ry="1.7" fill="#141018" />
+              <ellipse cx="14.4" cy="10.2" rx="1.25" ry="1.7" fill="#141018" />
+            </svg>
+          </span>
           Agent Workspace
           <span className="brand-sub">multiplayer</span>
         </div>
