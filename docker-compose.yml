@@ -1,0 +1,25 @@
+# One-command run on the EC2 box (or locally):  docker compose up -d --build
+# Serves the whole app on http://<host>/ (host port 80 -> container 8787).
+services:
+  maw:
+    build: .
+    image: maw:latest
+    container_name: maw
+    restart: always
+    ports:
+      - "80:8787"
+    environment:
+      # Region enables the Bedrock Nova Pro agent. Credentials come from the
+      # EC2 IAM role (preferred) or the AWS_* vars below if you set them.
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      BEDROCK_REGION: ${BEDROCK_REGION:-${AWS_REGION:-us-east-1}}
+      PORT: "8787"
+      DB_PATH: /data/maw.db
+      # Optional static creds (leave unset when using an IAM role):
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - maw-data:/data
+
+volumes:
+  maw-data:

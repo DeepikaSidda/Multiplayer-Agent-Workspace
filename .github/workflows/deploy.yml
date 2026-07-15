@@ -1,0 +1,55 @@
+# Auto-deploy to the EC2 instance on every push to main.
+#
+# One-time setup — add these GitHub repo secrets (Settings → Secrets → Actions):
+#   EC2_HOST         public DNS or IP of the instance
+#   EC2_USER         ssh user (Amazon Linux: ec2-user)
+#   EC2_SSH_KEY      the PRIVATE key (contents of your .pem) for that instance
+#   AWS_REGION       e.g. us-east-1  (enables the Bedrock agent)
+#
+# The instance must already have Docker + git (the ec2-userdata.sh bootstrap
+# installs them) and this repo cloned at /opt/maw. This workflow pulls, rebuilds,
+# and restarts the container.
+
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -euxo pipefail
+            REPO_DIR=/opt/maw
+            if [ ! -d "$REPO_DIR/.git" ]; then
+              sudo rm -rf "$REPO_DIR"
+              sudo git clone "https://github.com/${{ github.repository }}.git" "$REPO_DIR"
+              sudo chown -R "$USER" "$REPO_DIR"
+            fi
+            cd "$REPO_DIR"
+            git fetch --all
+            git reset --hard origin/main
+            docker build -t maw:latest .
+            docker rm -f maw 2>/dev/null || true
+            mkdir -p /opt/maw-data
+            docker run -d --name maw --restart always -p 80:8787 \
+              -e AWS_REGION="${{ secrets.AWS_REGION }}" \
+              -e BEDROCK_REGION="${{ secrets.AWS_REGION }}" \
+              -v /opt/maw-data:/data \
+              maw:latest
+            sleep 3
+            curl -fsS http://localhost/health

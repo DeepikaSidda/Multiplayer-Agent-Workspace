@@ -85,6 +85,20 @@ Open **`http://<Public-IPv4-DNS>`**. Verify: `curl http://localhost:8787/health`
 
 ---
 
+## Path C — one command with docker-compose
+
+On the instance (Docker installed): `docker compose up -d --build`.
+Serves on `http://<host>/`. Config via env (`AWS_REGION`, etc.) — see
+`docker-compose.yml`.
+
+## Continuous deploy (GitHub Actions)
+
+`.github/workflows/deploy.yml` redeploys on every push to `main`. Add repo
+secrets: `EC2_HOST`, `EC2_USER` (`ec2-user`), `EC2_SSH_KEY` (your `.pem`
+contents), and `AWS_REGION`. The instance needs Docker + git (the user-data
+bootstrap installs them). Each push pulls, rebuilds the image, and restarts the
+container, then hits `/health`.
+
 ## HTTPS (optional, gives a secure `wss://` link)
 
 Point a domain's A record at the instance, then:
