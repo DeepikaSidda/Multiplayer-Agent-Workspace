@@ -170,6 +170,13 @@ interface Room {
    * is appended here so operations run one at a time in submission order.
    */
   tail: Promise<unknown>;
+  /**
+   * Whether the persisted roster has been loaded into this in-memory room. A
+   * room is recreated empty after a process restart, so persisted agents (and
+   * humans) must be rehydrated once so `@mention` detection and sender
+   * resolution keep working across restarts.
+   */
+  hydrated: boolean;
 }
 
 export class RoomManager {
@@ -212,8 +219,28 @@ export class RoomManager {
    * (e.g. on every join/reconnect).
    */
   async ensureRoom(workspaceId: string): Promise<void> {
-    this.getOrCreateRoom(workspaceId);
+    const room = this.getOrCreateRoom(workspaceId);
+    // Claim hydration synchronously (before any await) so concurrent joins
+    // don't double-load the roster.
+    const needsHydration = !room.hydrated;
+    if (needsHydration) room.hydrated = true;
+
     await this.artifacts.ensureLoaded(workspaceId);
+
+    if (needsHydration) {
+      // Rehydrate the persisted roster into this in-memory room. Agents are
+      // durable teammates: restore them to the roster AND mark them active in
+      // presence so `@mention` detection and generation work after a restart.
+      // Humans are added to the roster (so message sender resolution works) but
+      // are NOT marked active until they actually reconnect.
+      const participants = await this.store.loadParticipants(workspaceId);
+      for (const p of participants) {
+        if (!room.roster.has(p.id)) room.roster.set(p.id, { ...p });
+        if (p.type === "agent") {
+          room.presence.join({ id: p.id, type: "agent" });
+        }
+      }
+    }
   }
 
   /** Whether an in-memory room currently exists for the workspace. */
@@ -585,6 +612,7 @@ export class RoomManager {
         roster: new Map<string, Participant>(),
         presence: new PresenceService(this.now),
         tail: Promise.resolve(),
+        hydrated: false,
       };
       this.rooms.set(workspaceId, room);
     }
