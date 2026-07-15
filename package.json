@@ -1,0 +1,19 @@
+{
+  "name": "multiplayer-agent-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time collaborative workspace where humans and AI agents co-create a shared artifact",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
