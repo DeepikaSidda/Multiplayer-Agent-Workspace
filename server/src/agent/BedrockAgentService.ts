@@ -144,18 +144,16 @@ export function buildSystemPrompt(
     currentArtifact,
     "</artifact>",
     "",
-    "Your output has TWO clearly separate parts:",
+    "First, write a SHORT chat reply: 1-2 plain sentences for the conversation. Do NOT write label words like 'CHAT REPLY' or 'ARTIFACT'. Do NOT put document content, headings, or lists in this reply.",
     "",
-    "1) CHAT REPLY: a short, conversational message of at most 2 sentences. This is what people read in chat. NEVER paste the artifact, headings, lists, or large content into the chat reply. If you are just greeting or answering a question, reply with ONLY these 1-2 sentences and nothing else.",
-    "",
-    "2) ARTIFACT (optional): include this ONLY when the user explicitly asks you to write or change the shared document. When you do, output exactly ONE fenced block with the COMPLETE updated document inside it (not a diff, and do NOT repeat that content anywhere in the chat reply):",
+    "Then, ONLY if the user asked you to write or change the shared document, append exactly ONE fenced block containing the COMPLETE updated document. The block MUST start with a line that is exactly ```artifact and end with a line that is exactly ``` — like this:",
     "```artifact",
-    "<the full updated artifact content, in PLAIN TEXT>",
+    "Introduction",
+    "This is the full updated document in plain text.",
     "```",
-    "If the user is only chatting or asking a question (for example 'say hi' or 'what do you think'), DO NOT output an artifact block at all.",
-    "Only include what the user asked to add or change; do not tack unrelated earlier sections onto the document unless asked to keep them.",
-    "",
-    "Write the artifact as PLAIN TEXT only. Do NOT use Markdown formatting: no #, ##, *, -, backticks, tables, or bold/italic markers. Use plain sentences, short headings on their own line, blank lines between sections, and simple numbered lists like '1.' or '2.' when needed.",
+    "Rules for the block: put the ENTIRE document inside it (not a diff), write it in PLAIN TEXT (no #, *, -, backticks, tables, or bold/italic), and do NOT repeat that content in your chat reply.",
+    "If the user is only chatting or asking a question (for example 'say hi' or 'what do you think'), reply with just the 1-2 sentences and DO NOT output any ```artifact block.",
+    "When you do write the document, include only what the user asked for; don't tack on unrelated earlier sections unless asked to keep them.",
   ].join("\n");
 }
 
@@ -208,10 +206,21 @@ export type ParseArtifactResult =
  *   `responseText` is the surrounding text (with the block removed, trimmed).
  * - An opening fence with no closing fence (malformed): `PARSE_ERROR`.
  */
+/**
+ * Strip stray section labels the model may echo (e.g. a leading "CHAT REPLY:"
+ * or a trailing "ARTIFACT" heading) so the chat reply reads cleanly.
+ */
+function stripReplyLabels(text: string): string {
+  return text
+    .replace(/^\s*chat\s*reply\s*[:\-]?\s*/i, "")
+    .replace(/\n?\s*artifact\s*:?\s*$/i, "")
+    .trim();
+}
+
 export function parseArtifactBlock(text: string): ParseArtifactResult {
   const openIndex = text.indexOf(ARTIFACT_FENCE_OPEN);
   if (openIndex === -1) {
-    return { ok: true, responseText: text.trim() };
+    return { ok: true, responseText: stripReplyLabels(text.trim()) };
   }
 
   // Inner content starts after the opening fence and its trailing newline.
@@ -235,7 +244,9 @@ export function parseArtifactBlock(text: string): ParseArtifactResult {
   // block's removal doesn't leave a doubled blank line between them.
   const before = text.slice(0, openIndex).trim();
   const after = text.slice(closeIndex + FENCE_CLOSE.length).trim();
-  const responseText = [before, after].filter((s) => s.length > 0).join("\n");
+  const responseText = stripReplyLabels(
+    [before, after].filter((s) => s.length > 0).join("\n"),
+  );
 
   return { ok: true, responseText, proposedArtifact };
 }
