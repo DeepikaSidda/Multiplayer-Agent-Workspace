@@ -61,10 +61,10 @@ jobs:
           cd "$REPO_DIR"
           git fetch --all
           git reset --hard origin/main
-          docker build -t maw:latest .
-          docker rm -f maw 2>/dev/null || true
+          sudo docker build -t maw:latest .
+          sudo docker rm -f maw 2>/dev/null || true
           mkdir -p /opt/maw-data
-          docker run -d --name maw --restart always -p 80:8787 \
+          sudo docker run -d --name maw --restart always -p 80:8787 \
             -e AWS_REGION="$AWS_REGION" \
             -e BEDROCK_REGION="$AWS_REGION" \
             -v /opt/maw-data:/data \
