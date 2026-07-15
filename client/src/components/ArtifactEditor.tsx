@@ -93,13 +93,13 @@ export function ArtifactEditor({ text, artifactType }: ArtifactEditorProps) {
   return (
     <section className="artifact-editor" aria-label="Artifact editor">
       <label className="artifact-editor-label" htmlFor="artifact-editor-textarea">
-        Artifact{artifactType ? ` (${artifactType})` : ""} — Markdown
+        Artifact{artifactType ? ` (${artifactType})` : ""} — Plain text
       </label>
       <textarea
         id="artifact-editor-textarea"
         className="artifact-editor-textarea"
         data-testid="artifact-editor"
-        aria-label="Artifact Markdown content"
+        aria-label="Artifact plain text content"
         value={value}
         onChange={handleChange}
         rows={16}

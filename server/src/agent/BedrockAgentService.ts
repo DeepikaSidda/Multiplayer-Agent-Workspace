@@ -144,9 +144,10 @@ export function buildSystemPrompt(
     currentArtifact,
     "</artifact>",
     "",
+    "Write the artifact as PLAIN TEXT only. Do NOT use Markdown formatting: no #, ##, *, -, backticks, tables, or bold/italic markers. Use plain sentences, short headings on their own line, blank lines between sections, and simple numbered lists like '1.' or '2.' when needed.",
     "When you want to change the artifact, include exactly ONE fenced block containing the COMPLETE proposed artifact content (not a diff), formatted as:",
     "```artifact",
-    "<the full proposed artifact content>",
+    "<the full proposed artifact content, in plain text>",
     "```",
     "Put any conversational reply as normal text outside that block. Omit the block entirely if you are not proposing an artifact change.",
   ].join("\n");
