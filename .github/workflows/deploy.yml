@@ -49,6 +49,9 @@ jobs:
             "$EC2_USER@$EC2_HOST" \
             "AWS_REGION='$AWS_REGION' REPO='$REPO' bash -s" <<'REMOTE'
           set -euxo pipefail
+          # Ensure prerequisites exist on the host (fresh instances may lack git).
+          command -v git >/dev/null 2>&1 || sudo dnf install -y git
+          command -v docker >/dev/null 2>&1 || { sudo dnf install -y docker && sudo systemctl enable --now docker; }
           REPO_DIR=/opt/maw
           if [ ! -d "$REPO_DIR/.git" ]; then
             sudo rm -rf "$REPO_DIR"
