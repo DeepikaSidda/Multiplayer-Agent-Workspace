@@ -67,6 +67,9 @@ jobs:
           sudo docker run -d --name maw --restart always -p 80:8787 \
             -e AWS_REGION="$AWS_REGION" \
             -e BEDROCK_REGION="$AWS_REGION" \
+            -e STORE=dynamo \
+            -e MAW_DYNAMO_TABLE=maw \
+            -e MAW_DYNAMO_REGION="$AWS_REGION" \
             -e DB_PATH=/data/maw.db \
             -v /opt/maw-data:/data \
             maw:latest

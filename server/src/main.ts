@@ -22,7 +22,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { SqliteWorkspaceStore } from "./store/index.js";
+import {
+  DynamoWorkspaceStore,
+  SqliteWorkspaceStore,
+  type WorkspaceStore,
+} from "./store/index.js";
 import { WorkspaceService } from "./workspace/index.js";
 import { RoomManager } from "./room/index.js";
 import { WebSocketGateway, wsConnection } from "./gateway/index.js";
@@ -31,6 +35,24 @@ import type { BedrockAgentService } from "./agent/index.js";
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? "maw.db";
 const REGION = process.env.BEDROCK_REGION ?? process.env.AWS_REGION;
+// Persistence backend: "dynamo" for managed DynamoDB (durable, instance-
+// independent) or "sqlite" (default, file on a mounted volume).
+const STORE_KIND = (process.env.STORE ?? "sqlite").toLowerCase();
+const DYNAMO_TABLE = process.env.MAW_DYNAMO_TABLE ?? "maw";
+const DYNAMO_REGION = process.env.MAW_DYNAMO_REGION ?? process.env.AWS_REGION;
+
+/** Construct the configured persistence store. */
+function buildStore(): WorkspaceStore {
+  if (STORE_KIND === "dynamo") {
+    console.log(`[maw] store: DynamoDB (table "${DYNAMO_TABLE}")`);
+    return new DynamoWorkspaceStore({
+      tableName: DYNAMO_TABLE,
+      clientConfig: DYNAMO_REGION ? { region: DYNAMO_REGION } : {},
+    });
+  }
+  console.log(`[maw] store: SQLite (${DB_PATH})`);
+  return new SqliteWorkspaceStore(DB_PATH);
+}
 
 // Directory of the production client build (vite build output). Overridable via
 // WEB_ROOT; defaults to `client/dist-web` relative to this compiled file
@@ -125,7 +147,7 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
 }
 
 async function main(): Promise<void> {
-  const store = new SqliteWorkspaceStore(DB_PATH);
+  const store = buildStore();
   const workspaceService = new WorkspaceService(store);
   const agentService = await buildAgentService();
   const roomManager = new RoomManager(store, agentService ? { agentService } : {});

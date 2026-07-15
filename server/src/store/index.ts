@@ -5,6 +5,10 @@
 
 export type { WorkspaceStore, WorkspaceCreation } from "./WorkspaceStore.js";
 export { SqliteWorkspaceStore } from "./SqliteWorkspaceStore.js";
+export {
+  DynamoWorkspaceStore,
+  type DynamoWorkspaceStoreOptions,
+} from "./DynamoWorkspaceStore.js";
 export { InMemoryWorkspaceStore } from "./InMemoryWorkspaceStore.js";
 export {
   FailureInjectingWorkspaceStore,

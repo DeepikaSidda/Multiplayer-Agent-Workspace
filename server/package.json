@@ -12,8 +12,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@maw/shared": "*",
     "@aws-sdk/client-bedrock-runtime": "^3.637.0",
+    "@aws-sdk/client-dynamodb": "^3.1087.0",
+    "@aws-sdk/lib-dynamodb": "^3.1087.0",
+    "@maw/shared": "*",
     "better-sqlite3": "^11.2.1",
     "ws": "^8.18.0",
     "yjs": "^13.6.18"
