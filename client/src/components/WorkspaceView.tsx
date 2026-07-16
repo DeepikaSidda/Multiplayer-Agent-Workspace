@@ -11,6 +11,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceConnection } from "../WorkspaceConnection.js";
 import { useWorkspaceConnection } from "../useWorkspaceConnection.js";
+import {
+  addToHistory,
+  loadHistory,
+  removeFromHistory,
+  type SavedResult,
+} from "../artifactHistory.js";
 import { PresenceIndicator } from "./PresenceIndicator.js";
 import { MessageLog } from "./MessageLog.js";
 import { MessageInput } from "./MessageInput.js";
@@ -42,6 +48,54 @@ export function WorkspaceView({
   const view = useWorkspaceConnection(connection);
   const [draft, setDraft] = useState("");
   const [pendingAgentEdit, setPendingAgentEdit] = useState<PendingAgentEdit | null>(null);
+
+  // Local, per-workspace saved-result history (Save to history / Clear).
+  const workspaceId = view.workspace?.id ?? "";
+  const [history, setHistory] = useState<SavedResult[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    setHistory(workspaceId ? loadHistory(workspaceId) : []);
+  }, [workspaceId]);
+
+  /** Replace the shared result content in a single CRDT transaction. */
+  const setArtifactContent = useCallback(
+    (content: string) => {
+      const text = connection.getText();
+      const apply = () => {
+        if (text.length > 0) text.delete(0, text.length);
+        if (content.length > 0) text.insert(0, content);
+      };
+      const doc = text.doc;
+      if (doc) doc.transact(apply);
+      else apply();
+    },
+    [connection],
+  );
+
+  const handleSaveToHistory = useCallback(() => {
+    const content = connection.getContent().trim();
+    if (!workspaceId || content.length === 0) return;
+    setHistory(addToHistory(workspaceId, connection.getContent()));
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
+  }, [connection, workspaceId]);
+
+  const handleClearArtifact = useCallback(() => {
+    setArtifactContent("");
+    setPendingAgentEdit(null);
+  }, [setArtifactContent]);
+
+  const handleRestore = useCallback(
+    (content: string) => setArtifactContent(content),
+    [setArtifactContent],
+  );
+
+  const handleDeleteHistory = useCallback(
+    (id: string) => setHistory(removeFromHistory(workspaceId, id)),
+    [workspaceId],
+  );
 
   // Keep the latest roster in a ref so the artifact-review effect (attached
   // once) can resolve an editor id → agent without re-subscribing constantly.
@@ -164,6 +218,71 @@ export function WorkspaceView({
         </section>
 
         <section className="workspace-artifact" aria-label="Artifact">
+          <div className="artifact-toolbar">
+            <button
+              type="button"
+              className="artifact-save"
+              data-testid="artifact-save"
+              onClick={handleSaveToHistory}
+            >
+              {savedFlash ? "Saved ✓" : "Save to history"}
+            </button>
+            <button
+              type="button"
+              className="secondary artifact-clear"
+              data-testid="artifact-clear"
+              onClick={handleClearArtifact}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="secondary artifact-history-toggle"
+              data-testid="artifact-history-toggle"
+              onClick={() => setHistoryOpen((v) => !v)}
+            >
+              History ({history.length})
+            </button>
+          </div>
+
+          {historyOpen && (
+            <ul className="artifact-history" data-testid="artifact-history">
+              {history.length === 0 && (
+                <li className="artifact-history-empty">
+                  No saved results yet. Click “Save to history” to keep the current result.
+                </li>
+              )}
+              {history.map((entry) => (
+                <li key={entry.id} className="artifact-history-item">
+                  <span className="artifact-history-meta">
+                    {new Date(entry.savedAt).toLocaleString()} ·{" "}
+                    {entry.content.trim().split(/\s+/).length} words
+                  </span>
+                  <span className="artifact-history-preview">
+                    {entry.content.trim().slice(0, 80) || "(empty)"}
+                  </span>
+                  <span className="artifact-history-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => handleRestore(entry.content)}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary artifact-history-delete"
+                      onClick={() => handleDeleteHistory(entry.id)}
+                      aria-label="Delete saved result"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {pendingAgentEdit && (
             <div className="agent-review" role="status" data-testid="agent-review">
               <span className="agent-review-text">

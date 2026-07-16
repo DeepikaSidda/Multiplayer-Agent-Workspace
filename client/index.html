@@ -305,6 +305,23 @@
       .agent-review-keep { background: linear-gradient(180deg, var(--agent), #2bb591); box-shadow: none; padding: 0.32rem 0.7rem; font-size: 0.76rem; }
       .agent-review-revert { background: var(--bg-elev-2); color: var(--danger); border-color: rgba(255,107,117,0.35); box-shadow: none; padding: 0.32rem 0.7rem; font-size: 0.76rem; }
 
+      /* ============ Artifact toolbar + history ============ */
+      .artifact-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+      .artifact-save { background: linear-gradient(180deg, var(--agent), #2bb591); box-shadow: none; padding: 0.42rem 0.8rem; font-size: 0.8rem; }
+      .artifact-clear, .artifact-history-toggle { padding: 0.42rem 0.8rem; font-size: 0.8rem; }
+      .artifact-history { list-style: none; margin: 0 0 0.6rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; max-height: 220px; overflow: auto; }
+      .artifact-history-empty { color: var(--text-faint); font-size: 0.8rem; padding: 0.5rem; }
+      .artifact-history-item {
+        display: flex; flex-direction: column; gap: 0.25rem;
+        padding: 0.5rem 0.6rem; border-radius: var(--radius-sm);
+        background: var(--bg-elev-2); border: 1px solid var(--border);
+      }
+      .artifact-history-meta { font-size: 0.68rem; color: var(--text-faint); }
+      .artifact-history-preview { font-size: 0.8rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .artifact-history-actions { display: flex; gap: 0.4rem; margin-top: 0.15rem; }
+      .artifact-history-actions button { padding: 0.28rem 0.6rem; font-size: 0.72rem; }
+      .artifact-history-delete { color: var(--danger); border-color: rgba(255,107,117,0.3); background: var(--danger-soft); }
+
       /* ============ Artifact editor ============ */
       .workspace-artifact { gap: 0.5rem; }
       .artifact-editor { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; min-height: 0; }
