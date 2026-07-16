@@ -6,7 +6,7 @@ Unlike a normal chatbot, the AI is a **first-class participant**: it joins the s
 
 ![Multiplayer Agent Workspace poster](Screenshots/poster1.png)
 
-> **Live demo (join directly):** http://13.220.41.228/#7b62331d-5653-42c6-9022-73cffae8ea5c — just enter a name to join the shared workspace.
+> **Live demo (join directly):** http://100.61.101.22/#7b62331d-5653-42c6-9022-73cffae8ea5c — just enter a name to join the shared workspace. (AWS EC2 with a static Elastic IP, us-east-1)
 
 ---
 
