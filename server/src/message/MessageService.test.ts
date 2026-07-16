@@ -351,3 +351,43 @@ describe("message ordering", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// hydrate — restore the sequence counter after a restart
+// ---------------------------------------------------------------------------
+
+describe("MessageService.hydrate", () => {
+  it("continues past the highest persisted sequence so it never overwrites history", async () => {
+    // New message gets a later timestamp so it also orders last.
+    const { service } = await makeService(humanSender, fakeClock([200]));
+
+    // Simulate a restart: seed from three persisted messages (sequences 0..2).
+    const persisted: Message[] = [
+      makeMessage({ id: "m-a", sequence: 0, timestamp: 100 }),
+      makeMessage({ id: "m-b", sequence: 1, timestamp: 101 }),
+      makeMessage({ id: "m-c", sequence: 2, timestamp: 102 }),
+    ];
+    service.hydrate(WS, persisted);
+
+    // The next submitted message must get sequence 3, not 0.
+    const result = await service.submit(WS, "p-owner", "next line");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.message.sequence).toBe(3);
+    }
+
+    // The restored log plus the new message are all present and ordered.
+    const log = service.getMessages(WS);
+    expect(log.map((m) => m.sequence)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("never lowers an already-advanced counter", async () => {
+    const { service } = await makeService();
+    await service.submit(WS, "p-owner", "first"); // sequence 0 -> next is 1
+    // Hydrating with an empty/older set must not reset the counter.
+    service.hydrate(WS, []);
+    const result = await service.submit(WS, "p-owner", "second");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.message.sequence).toBe(1);
+  });
+});

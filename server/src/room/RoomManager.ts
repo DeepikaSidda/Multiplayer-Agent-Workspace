@@ -240,6 +240,12 @@ export class RoomManager {
           room.presence.join({ id: p.id, type: "agent" });
         }
       }
+
+      // Seed the message sequence counter from persisted messages so new
+      // messages continue past the last one instead of reusing sequence
+      // numbers and overwriting history after a restart.
+      const messages = await this.store.loadMessages(workspaceId);
+      this.messages.hydrate(workspaceId, messages);
     }
   }
 

@@ -185,6 +185,27 @@ export class MessageService {
   }
 
   /**
+   * Seed the in-memory log and the per-workspace sequence counter from durably
+   * persisted messages when a room is (re)loaded — e.g. after a server restart.
+   *
+   * The sequence counter is authoritative for the `MSG#<sequence>` storage key,
+   * so it MUST continue past the highest persisted sequence; otherwise new
+   * messages would reuse existing sequence values and overwrite prior messages.
+   * The counter is never lowered.
+   */
+  hydrate(workspaceId: string, messages: Message[]): void {
+    const maxSequence = messages.reduce(
+      (max, m) => (m.sequence > max ? m.sequence : max),
+      -1,
+    );
+    const current = this.nextSequence.get(workspaceId) ?? 0;
+    this.nextSequence.set(workspaceId, Math.max(current, maxSequence + 1));
+    if (!this.logs.has(workspaceId)) {
+      this.logs.set(workspaceId, [...orderMessages(messages)]);
+    }
+  }
+
+  /**
    * The committed message log for a workspace, ordered by ascending
    * `(timestamp, sequence)` (Requirement 3.4). Returns a defensive copy.
    */
