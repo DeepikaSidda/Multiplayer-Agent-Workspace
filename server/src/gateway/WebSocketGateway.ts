@@ -277,7 +277,7 @@ export class WebSocketGateway {
     const snapshot = await this.buildSnapshot(
       workspaceId,
       joined.workspace,
-      joined.participant.id,
+      joined.participant.displayName,
     );
     if (snapshot === null) {
       this.sendError(
@@ -524,8 +524,9 @@ export class WebSocketGateway {
       this.sendError(session, "INTERNAL_ERROR", "Could not save to history.");
       return;
     }
-    // History is private per user: only update the saver's own sessions.
-    await this.sendHistoryToParticipant(workspaceId, session.participantId);
+    // History is private per user (keyed by display name so it survives
+    // rejoins and origin/IP changes): update this user's own sessions.
+    await this.sendHistoryToName(workspaceId, entry.savedByName);
   }
 
   /** `deleteHistory`: delete the caller's saved entry, then refresh their list. */
@@ -535,12 +536,15 @@ export class WebSocketGateway {
       return;
     }
     const workspaceId = session.workspaceId;
-    // Only allow deleting an entry the caller owns (private history).
+    const callerName = this.resolveParticipantName(
+      workspaceId,
+      session.participantId,
+    );
+    // Only allow deleting an entry the caller owns (private history by name).
     const all = await this.store.loadHistory(workspaceId);
     const target = all.find((e) => e.id === id);
-    if (!target || target.savedById !== session.participantId) {
-      // Nothing the caller owns; just re-send their current list.
-      await this.sendHistoryToParticipant(workspaceId, session.participantId);
+    if (!target || (callerName !== null && target.savedByName !== callerName)) {
+      if (callerName !== null) await this.sendHistoryToName(workspaceId, callerName);
       return;
     }
     try {
@@ -549,19 +553,31 @@ export class WebSocketGateway {
       this.sendError(session, "INTERNAL_ERROR", "Could not delete history entry.");
       return;
     }
-    await this.sendHistoryToParticipant(workspaceId, session.participantId);
+    if (callerName !== null) await this.sendHistoryToName(workspaceId, callerName);
+  }
+
+  /** Resolve a participant's current display name in a room, or null. */
+  private resolveParticipantName(
+    workspaceId: string,
+    participantId: string,
+  ): string | null {
+    return (
+      this.roomManager.getParticipant(workspaceId, participantId)?.displayName ??
+      null
+    );
   }
 
   /**
-   * Send a participant their OWN saved-result history (private per user) to
-   * every session currently authenticated as that participant in the room.
+   * Send the saved-result history for a given display name (private per user,
+   * keyed by name so it survives rejoins/origin changes) to every session in
+   * the room currently identified by that name.
    */
-  private async sendHistoryToParticipant(
+  private async sendHistoryToName(
     workspaceId: string,
-    participantId: string,
+    displayName: string,
   ): Promise<void> {
     const all = await this.store.loadHistory(workspaceId);
-    const entries = all.filter((e) => e.savedById === participantId);
+    const entries = all.filter((e) => e.savedByName === displayName);
     const room = this.rooms.get(workspaceId);
     if (!room) return;
     const event: ServerToClientEvent = {
@@ -571,7 +587,12 @@ export class WebSocketGateway {
     };
     const serialized = JSON.stringify(event);
     for (const s of room) {
-      if (s.participantId === participantId) s.connection.send(serialized);
+      if (
+        s.participantId &&
+        this.resolveParticipantName(workspaceId, s.participantId) === displayName
+      ) {
+        s.connection.send(serialized);
+      }
     }
   }
 
@@ -729,7 +750,7 @@ export class WebSocketGateway {
   private async buildSnapshot(
     workspaceId: string,
     workspace: Workspace,
-    participantId: string,
+    displayName: string,
   ): Promise<WorkspaceSnapshotPayload | null> {
     const artifactSnapshot = await this.store.loadArtifact(workspaceId);
     if (artifactSnapshot === null) return null;
@@ -757,9 +778,10 @@ export class WebSocketGateway {
       };
     });
     const messages: Message[] = await this.store.loadMessages(workspaceId);
-    // History is private per user: only the joining participant's own entries.
+    // History is private per user, keyed by display name so it survives
+    // rejoins and origin/IP changes: only this user's own entries.
     const history = (await this.store.loadHistory(workspaceId)).filter(
-      (e) => e.savedById === participantId,
+      (e) => e.savedByName === displayName,
     );
 
     // Prefer the authoritative in-memory content (warmed via ensureRoom); fall
