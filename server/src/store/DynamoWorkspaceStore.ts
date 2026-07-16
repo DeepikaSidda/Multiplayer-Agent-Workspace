@@ -48,8 +48,6 @@ const META_SK = "META";
 const ARTIFACT_SK = "ARTIFACT";
 const PART_PREFIX = "PART#";
 const MSG_PREFIX = "MSG#";
-/** Zero-pad the per-workspace sequence so lexical SK order matches numeric order. */
-const SEQUENCE_PAD = 16;
 
 function wsPk(workspaceId: string): string {
   return `WS#${workspaceId}`;
@@ -60,8 +58,14 @@ function refPk(joinReference: string): string {
 function partSk(participantId: string): string {
   return `${PART_PREFIX}${participantId}`;
 }
-function msgSk(sequence: number): string {
-  return `${MSG_PREFIX}${String(sequence).padStart(SEQUENCE_PAD, "0")}`;
+/**
+ * A message's storage key is derived from its UNIQUE id (not its sequence), so
+ * two messages can never collide on the same key and a stored message can never
+ * be overwritten — even if a per-workspace sequence counter were ever reset.
+ * Ordering is handled at read time by sorting on (timestamp, sequence).
+ */
+function msgSk(messageId: string): string {
+  return `${MSG_PREFIX}${messageId}`;
 }
 
 export interface DynamoWorkspaceStoreOptions {
@@ -150,7 +154,12 @@ export class DynamoWorkspaceStore implements WorkspaceStore {
 
   async appendMessage(m: Message): Promise<void> {
     await this.doc.send(
-      new PutCommand({ TableName: this.table, Item: messageItem(m) }),
+      new PutCommand({
+        TableName: this.table,
+        Item: messageItem(m),
+        // Never overwrite an existing message at this key (id-based, unique).
+        ConditionExpression: "attribute_not_exists(SK)",
+      }),
     );
   }
 
@@ -294,7 +303,7 @@ function itemToParticipant(item: Record<string, unknown>): Participant {
 function messageItem(m: Message): Record<string, unknown> {
   return {
     PK: wsPk(m.workspaceId),
-    SK: msgSk(m.sequence),
+    SK: msgSk(m.id),
     id: m.id,
     workspaceId: m.workspaceId,
     senderId: m.senderId,
