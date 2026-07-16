@@ -36,6 +36,7 @@ import type {
   Message,
   MessageRejectionReason,
   Participant,
+  SavedResultEntry,
   Workspace,
 } from "@maw/shared";
 import type { ConnectionState, WorkspaceConnection } from "./WorkspaceConnection.js";
@@ -57,6 +58,8 @@ export interface WorkspaceView {
   participants: Participant[];
   /** Message log in `(timestamp, sequence)` order. */
   messages: Message[];
+  /** Saved-result history, newest first (durable, shared). */
+  history: SavedResultEntry[];
   /** Count of currently active participants. */
   activeCount: number;
   /** Artifact metadata (type, last editor, timestamps) sans CRDT state. */
@@ -90,6 +93,9 @@ export function useWorkspaceConnection(connection: WorkspaceConnection): Workspa
     connection.getParticipants(),
   );
   const [messages, setMessages] = useState<Message[]>(() => connection.getMessages());
+  const [history, setHistory] = useState<SavedResultEntry[]>(() =>
+    connection.getHistory(),
+  );
   const [activeCount, setActiveCount] = useState<number>(() =>
     countActive(connection.getParticipants()),
   );
@@ -112,6 +118,7 @@ export function useWorkspaceConnection(connection: WorkspaceConnection): Workspa
       setWorkspace(connection.getWorkspace());
       setArtifactMeta(connection.getArtifactMeta());
       setMessages(connection.getMessages());
+      setHistory(connection.getHistory());
       syncRoster();
     };
 
@@ -119,6 +126,7 @@ export function useWorkspaceConnection(connection: WorkspaceConnection): Workspa
       connection.onStateChange(setConnectionState),
       connection.on("workspaceSnapshot", syncSnapshot),
       connection.on("messageAppended", () => setMessages(connection.getMessages())),
+      connection.on("historyUpdated", () => setHistory(connection.getHistory())),
       connection.on("presenceUpdate", syncRoster),
       connection.on("participantCountUpdate", (payload) =>
         setActiveCount(payload.activeCount),
@@ -156,6 +164,7 @@ export function useWorkspaceConnection(connection: WorkspaceConnection): Workspa
     workspace,
     participants,
     messages,
+    history,
     activeCount,
     artifactMeta,
     lastMessageRejection,

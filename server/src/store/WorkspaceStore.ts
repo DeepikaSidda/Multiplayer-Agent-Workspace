@@ -17,6 +17,7 @@ import type {
   ArtifactSnapshot,
   Message,
   Participant,
+  SavedResultEntry,
   Workspace,
 } from "@maw/shared";
 
@@ -86,4 +87,13 @@ export interface WorkspaceStore {
 
   /** Remove a participant from a workspace (no-op if absent). */
   removeParticipant(workspaceId: string, participantId: string): Promise<void>;
+
+  /** Durably save a shared-result history entry. */
+  saveHistoryEntry(entry: SavedResultEntry): Promise<void>;
+
+  /** Load the saved-result history for a workspace, newest first. */
+  loadHistory(workspaceId: string): Promise<SavedResultEntry[]>;
+
+  /** Delete a saved-result history entry by id (no-op if absent). */
+  deleteHistoryEntry(workspaceId: string, entryId: string): Promise<void>;
 }

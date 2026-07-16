@@ -218,6 +218,12 @@ export class WebSocketGateway {
       case "export":
         this.onExport(session);
         return;
+      case "saveHistory":
+        await this.onSaveHistory(session, event.payload.content);
+        return;
+      case "deleteHistory":
+        await this.onDeleteHistory(session, event.payload.id);
+        return;
       default: {
         // Exhaustiveness guard: unreachable for a validated event.
         const _never: never = event;
@@ -483,6 +489,66 @@ export class WebSocketGateway {
     });
   }
 
+  /**
+   * `saveHistory`: persist the current shared-result content as a durable,
+   * shared history entry attributed to the saver, then broadcast the updated
+   * history to everyone.
+   */
+  private async onSaveHistory(session: Session, content: string): Promise<void> {
+    if (!session.workspaceId || !session.participantId) {
+      this.sendError(session, "MALFORMED_EVENT", "Join a workspace first.");
+      return;
+    }
+    const workspaceId = session.workspaceId;
+    if (content.trim().length === 0) return; // Nothing to save.
+
+    const saver = this.roomManager.getParticipant(
+      workspaceId,
+      session.participantId,
+    );
+    const entry = {
+      id: randomUUID(),
+      workspaceId,
+      content,
+      savedById: session.participantId,
+      savedByName: saver?.displayName ?? "Unknown",
+      savedAt: this.now(),
+    };
+    try {
+      await this.store.saveHistoryEntry(entry);
+    } catch {
+      this.sendError(session, "INTERNAL_ERROR", "Could not save to history.");
+      return;
+    }
+    await this.broadcastHistory(workspaceId);
+  }
+
+  /** `deleteHistory`: delete a saved entry and broadcast the updated history. */
+  private async onDeleteHistory(session: Session, id: string): Promise<void> {
+    if (!session.workspaceId) {
+      this.sendError(session, "MALFORMED_EVENT", "Join a workspace first.");
+      return;
+    }
+    const workspaceId = session.workspaceId;
+    try {
+      await this.store.deleteHistoryEntry(workspaceId, id);
+    } catch {
+      this.sendError(session, "INTERNAL_ERROR", "Could not delete history entry.");
+      return;
+    }
+    await this.broadcastHistory(workspaceId);
+  }
+
+  /** Load the current saved-result history and broadcast it to the room. */
+  private async broadcastHistory(workspaceId: string): Promise<void> {
+    const entries = await this.store.loadHistory(workspaceId);
+    this.broadcast(workspaceId, {
+      type: "historyUpdated",
+      workspaceId,
+      payload: { entries },
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Agent orchestration
   // -------------------------------------------------------------------------
@@ -664,6 +730,7 @@ export class WebSocketGateway {
       };
     });
     const messages: Message[] = await this.store.loadMessages(workspaceId);
+    const history = await this.store.loadHistory(workspaceId);
 
     // Prefer the authoritative in-memory content (warmed via ensureRoom); fall
     // back to the persisted snapshot content if the room is somehow unloaded.
@@ -681,7 +748,7 @@ export class WebSocketGateway {
       yjsState: bytesToBase64(artifactSnapshot.yjsState),
     };
 
-    return { workspace, participants, artifact, messages };
+    return { workspace, participants, artifact, messages, history };
   }
 
   // -------------------------------------------------------------------------

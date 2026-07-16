@@ -74,7 +74,7 @@ function snapshot(participants: Participant[], messages: Message[]): ServerToCli
   return {
     type: "workspaceSnapshot",
     workspaceId: "ws-1",
-    payload: { workspace: WORKSPACE, participants, artifact, messages },
+    payload: { workspace: WORKSPACE, participants, artifact, messages, history: [] },
   };
 }
 

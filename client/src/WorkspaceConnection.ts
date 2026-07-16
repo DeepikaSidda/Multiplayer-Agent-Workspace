@@ -34,6 +34,7 @@ import type {
   ClientToServerEvent,
   Message,
   Participant,
+  SavedResultEntry,
   ServerToClientEvent,
   Workspace,
   WorkspaceSnapshotPayload,
@@ -172,6 +173,7 @@ export class WorkspaceConnection {
   private workspace: Workspace | null = null;
   private participants: Participant[] = [];
   private messages: Message[] = [];
+  private history: SavedResultEntry[] = [];
   private artifactMeta: Omit<ArtifactState, "yjsState"> | null = null;
 
   // --- subscriptions ------------------------------------------------------
@@ -269,6 +271,24 @@ export class WorkspaceConnection {
     this.sendEnvelope({ type: "export", workspaceId: this.workspaceId, payload: {} });
   }
 
+  /** Save the current shared-result content to the durable, shared history. */
+  saveHistory(content: string): void {
+    this.sendEnvelope({
+      type: "saveHistory",
+      workspaceId: this.workspaceId,
+      payload: { content },
+    });
+  }
+
+  /** Delete a saved history entry by id. */
+  deleteHistory(id: string): void {
+    this.sendEnvelope({
+      type: "deleteHistory",
+      workspaceId: this.workspaceId,
+      payload: { id },
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Rendered snapshot accessors (consumed by 13.2 / 13.3 UI)
   // -------------------------------------------------------------------------
@@ -296,6 +316,11 @@ export class WorkspaceConnection {
   /** A copy of the message log in `(timestamp, sequence)` order. */
   getMessages(): Message[] {
     return [...this.messages];
+  }
+
+  /** A copy of the saved-result history, newest first. */
+  getHistory(): SavedResultEntry[] {
+    return [...this.history];
   }
 
   /** Artifact metadata (type, last editor, timestamps) without the CRDT state. */
@@ -419,6 +444,9 @@ export class WorkspaceConnection {
           event.payload.presenceState,
         );
         break;
+      case "historyUpdated":
+        this.history = [...event.payload.entries];
+        break;
       default:
         break;
     }
@@ -439,6 +467,7 @@ export class WorkspaceConnection {
     // a reconnect/rejoin can never drop a message the client has already seen.
     // Ordered by (timestamp, sequence) to match the server's total order.
     this.messages = mergeMessagesById(this.messages, payload.messages);
+    this.history = [...payload.history];
 
     const { yjsState, ...meta } = payload.artifact;
     this.artifactMeta = meta;

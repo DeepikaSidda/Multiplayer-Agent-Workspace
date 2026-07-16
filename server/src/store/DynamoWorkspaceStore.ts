@@ -40,6 +40,7 @@ import type {
   Participant,
   ParticipantType,
   PresenceState,
+  SavedResultEntry,
   Workspace,
 } from "@maw/shared";
 import type { WorkspaceCreation, WorkspaceStore } from "./WorkspaceStore.js";
@@ -48,6 +49,7 @@ const META_SK = "META";
 const ARTIFACT_SK = "ARTIFACT";
 const PART_PREFIX = "PART#";
 const MSG_PREFIX = "MSG#";
+const HIST_PREFIX = "HIST#";
 
 function wsPk(workspaceId: string): string {
   return `WS#${workspaceId}`;
@@ -66,6 +68,10 @@ function partSk(participantId: string): string {
  */
 function msgSk(messageId: string): string {
   return `${MSG_PREFIX}${messageId}`;
+}
+/** History entries are keyed by their unique id (no overwrite by construction). */
+function histSk(entryId: string): string {
+  return `${HIST_PREFIX}${entryId}`;
 }
 
 export interface DynamoWorkspaceStoreOptions {
@@ -213,6 +219,53 @@ export class DynamoWorkspaceStore implements WorkspaceStore {
       new DeleteCommand({
         TableName: this.table,
         Key: { PK: wsPk(workspaceId), SK: partSk(participantId) },
+      }),
+    );
+  }
+
+  async saveHistoryEntry(entry: SavedResultEntry): Promise<void> {
+    await this.doc.send(
+      new PutCommand({
+        TableName: this.table,
+        Item: {
+          PK: wsPk(entry.workspaceId),
+          SK: histSk(entry.id),
+          id: entry.id,
+          workspaceId: entry.workspaceId,
+          content: entry.content,
+          savedById: entry.savedById,
+          savedByName: entry.savedByName,
+          savedAt: entry.savedAt,
+        },
+        // Unique-id key: never overwrite an existing saved entry.
+        ConditionExpression: "attribute_not_exists(SK)",
+      }),
+    );
+  }
+
+  async loadHistory(workspaceId: string): Promise<SavedResultEntry[]> {
+    const items = await this.queryAll(workspaceId, HIST_PREFIX);
+    const entries = items.map((item) => ({
+      id: String(item.id),
+      workspaceId: String(item.workspaceId),
+      content: String(item.content),
+      savedById: String(item.savedById),
+      savedByName: String(item.savedByName),
+      savedAt: Number(item.savedAt),
+    }));
+    // Newest first.
+    entries.sort((a, b) => b.savedAt - a.savedAt);
+    return entries;
+  }
+
+  async deleteHistoryEntry(
+    workspaceId: string,
+    entryId: string,
+  ): Promise<void> {
+    await this.doc.send(
+      new DeleteCommand({
+        TableName: this.table,
+        Key: { PK: wsPk(workspaceId), SK: histSk(entryId) },
       }),
     );
   }

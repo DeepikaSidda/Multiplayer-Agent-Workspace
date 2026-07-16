@@ -20,6 +20,7 @@ import type {
   Participant,
   ParticipantType,
   PresenceState,
+  SavedResultEntry,
   Workspace,
 } from "@maw/shared";
 import type { WorkspaceCreation, WorkspaceStore } from "./WorkspaceStore.js";
@@ -130,6 +131,19 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
         lastEditedAt INTEGER,
         yjsState     BLOB NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS result_history (
+        id          TEXT NOT NULL,
+        workspaceId TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        savedById   TEXT NOT NULL,
+        savedByName TEXT NOT NULL,
+        savedAt     INTEGER NOT NULL,
+        PRIMARY KEY (workspaceId, id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_history_order
+        ON result_history (workspaceId, savedAt);
     `);
   }
 
@@ -258,6 +272,35 @@ export class SqliteWorkspaceStore implements WorkspaceStore {
       .prepare("SELECT * FROM participants WHERE workspaceId = ?")
       .all(workspaceId) as ParticipantRow[];
     return rows.map(rowToParticipant);
+  }
+
+  async saveHistoryEntry(entry: SavedResultEntry): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO result_history
+           (id, workspaceId, content, savedById, savedByName, savedAt)
+         VALUES
+           (@id, @workspaceId, @content, @savedById, @savedByName, @savedAt)
+         ON CONFLICT(workspaceId, id) DO NOTHING`,
+      )
+      .run(entry);
+  }
+
+  async loadHistory(workspaceId: string): Promise<SavedResultEntry[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM result_history
+         WHERE workspaceId = ?
+         ORDER BY savedAt DESC`,
+      )
+      .all(workspaceId) as SavedResultEntry[];
+    return rows.map((r) => ({ ...r }));
+  }
+
+  async deleteHistoryEntry(workspaceId: string, entryId: string): Promise<void> {
+    this.db
+      .prepare("DELETE FROM result_history WHERE workspaceId = ? AND id = ?")
+      .run(workspaceId, entryId);
   }
 
   /** Close the underlying database connection. */

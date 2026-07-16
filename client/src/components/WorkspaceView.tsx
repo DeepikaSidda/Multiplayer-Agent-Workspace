@@ -11,12 +11,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceConnection } from "../WorkspaceConnection.js";
 import { useWorkspaceConnection } from "../useWorkspaceConnection.js";
-import {
-  addToHistory,
-  loadHistory,
-  removeFromHistory,
-  type SavedResult,
-} from "../artifactHistory.js";
 import { PresenceIndicator } from "./PresenceIndicator.js";
 import { MessageLog } from "./MessageLog.js";
 import { MessageInput } from "./MessageInput.js";
@@ -49,15 +43,11 @@ export function WorkspaceView({
   const [draft, setDraft] = useState("");
   const [pendingAgentEdit, setPendingAgentEdit] = useState<PendingAgentEdit | null>(null);
 
-  // Local, per-workspace saved-result history (Save to history / Clear).
-  const workspaceId = view.workspace?.id ?? "";
-  const [history, setHistory] = useState<SavedResult[]>([]);
+  // Durable, shared saved-result history (Save to history / Clear), stored
+  // server-side and delivered via the connection.
+  const history = view.history;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-
-  useEffect(() => {
-    setHistory(workspaceId ? loadHistory(workspaceId) : []);
-  }, [workspaceId]);
 
   /** Replace the shared result content in a single CRDT transaction. */
   const setArtifactContent = useCallback(
@@ -75,12 +65,12 @@ export function WorkspaceView({
   );
 
   const handleSaveToHistory = useCallback(() => {
-    const content = connection.getContent().trim();
-    if (!workspaceId || content.length === 0) return;
-    setHistory(addToHistory(workspaceId, connection.getContent()));
+    const content = connection.getContent();
+    if (content.trim().length === 0) return;
+    connection.saveHistory(content);
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1500);
-  }, [connection, workspaceId]);
+  }, [connection]);
 
   const handleClearArtifact = useCallback(() => {
     setArtifactContent("");
@@ -93,8 +83,8 @@ export function WorkspaceView({
   );
 
   const handleDeleteHistory = useCallback(
-    (id: string) => setHistory(removeFromHistory(workspaceId, id)),
-    [workspaceId],
+    (id: string) => connection.deleteHistory(id),
+    [connection],
   );
 
   // Keep the latest roster in a ref so the artifact-review effect (attached
@@ -255,8 +245,9 @@ export function WorkspaceView({
               {history.map((entry) => (
                 <li key={entry.id} className="artifact-history-item">
                   <span className="artifact-history-meta">
-                    {new Date(entry.savedAt).toLocaleString()} ·{" "}
-                    {entry.content.trim().split(/\s+/).length} words
+                    {new Date(entry.savedAt).toLocaleString()} · saved by{" "}
+                    {entry.savedByName} · {entry.content.trim().split(/\s+/).length}{" "}
+                    words
                   </span>
                   <span className="artifact-history-preview">
                     {entry.content.trim().slice(0, 80) || "(empty)"}

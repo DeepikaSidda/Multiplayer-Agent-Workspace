@@ -90,3 +90,20 @@ export interface ArtifactSnapshot {
   /** Encoded Y.Doc state for durable CRDT restore. */
   yjsState: Uint8Array;
 }
+
+/**
+ * A saved snapshot of the shared result (the artifact content at a moment in
+ * time), captured via "Save to history". Durable and shared across the
+ * workspace, and attributed to the participant who saved it.
+ */
+export interface SavedResultEntry {
+  id: string;
+  workspaceId: string;
+  /** The full shared-result content that was saved. */
+  content: string;
+  /** The participant who saved it. */
+  savedById: string;
+  savedByName: string;
+  /** Save time in epoch milliseconds. */
+  savedAt: number;
+}

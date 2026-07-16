@@ -13,6 +13,7 @@ import type {
   Participant,
   PresenceState,
   ParticipantType,
+  SavedResultEntry,
   Workspace,
 } from "./types.js";
 
@@ -95,6 +96,16 @@ export type LeavePayload = Record<string, never>;
 /** Request a Markdown export of the current artifact. */
 export type ExportPayload = Record<string, never>;
 
+/** Save the current shared-result content into the durable, shared history. */
+export interface SaveHistoryPayload {
+  content: string;
+}
+
+/** Delete a saved history entry by id. */
+export interface DeleteHistoryPayload {
+  id: string;
+}
+
 /** Discriminated union of all client -> server events. */
 export type ClientToServerEvent =
   | { type: "join"; workspaceId: string; payload: JoinPayload }
@@ -103,7 +114,9 @@ export type ClientToServerEvent =
   | { type: "addAgent"; workspaceId: string; payload: AddAgentPayload }
   | { type: "removeAgent"; workspaceId: string; payload: RemoveAgentPayload }
   | { type: "leave"; workspaceId: string; payload: LeavePayload }
-  | { type: "export"; workspaceId: string; payload: ExportPayload };
+  | { type: "export"; workspaceId: string; payload: ExportPayload }
+  | { type: "saveHistory"; workspaceId: string; payload: SaveHistoryPayload }
+  | { type: "deleteHistory"; workspaceId: string; payload: DeleteHistoryPayload };
 
 /** All client -> server event type discriminants. */
 export type ClientToServerEventType = ClientToServerEvent["type"];
@@ -119,6 +132,14 @@ export interface WorkspaceSnapshotPayload {
   artifact: ArtifactState;
   /** Complete message log ordered by ascending (timestamp, sequence). */
   messages: Message[];
+  /** Saved shared-result history, newest first. */
+  history: SavedResultEntry[];
+}
+
+/** The saved-result history changed. Sent to all participants. */
+export interface HistoryUpdatedPayload {
+  /** The full saved-result history, newest first. */
+  entries: SavedResultEntry[];
 }
 
 /** A participant's presence changed. Requirements 2.1, 2.2, 2.3, 5.3. */
@@ -197,6 +218,7 @@ export type ServerToClientEvent =
   | { type: "agentAdded"; workspaceId: string; payload: AgentAddedPayload }
   | { type: "agentRemoved"; workspaceId: string; payload: AgentRemovedPayload }
   | { type: "exportReady"; workspaceId: string; payload: ExportReadyPayload }
+  | { type: "historyUpdated"; workspaceId: string; payload: HistoryUpdatedPayload }
   | { type: "error"; workspaceId: string; payload: ErrorPayload };
 
 /** All server -> client event type discriminants. */

@@ -16,6 +16,7 @@ import type {
   ArtifactSnapshot,
   Message,
   Participant,
+  SavedResultEntry,
   Workspace,
 } from "@maw/shared";
 import type { WorkspaceCreation, WorkspaceStore } from "./WorkspaceStore.js";
@@ -26,6 +27,7 @@ export class InMemoryWorkspaceStore implements WorkspaceStore {
   private readonly participants = new Map<string, Map<string, Participant>>();
   private readonly messages = new Map<string, Message[]>();
   private readonly artifacts = new Map<string, ArtifactSnapshot>();
+  private readonly history = new Map<string, SavedResultEntry[]>();
 
   async createWorkspace(creation: WorkspaceCreation): Promise<void> {
     const { workspace, owner, artifact } = creation;
@@ -109,6 +111,32 @@ export class InMemoryWorkspaceStore implements WorkspaceStore {
     const roster = this.participants.get(workspaceId);
     if (roster === undefined) return [];
     return [...roster.values()].map(cloneParticipant);
+  }
+
+  async saveHistoryEntry(entry: SavedResultEntry): Promise<void> {
+    const list = this.history.get(entry.workspaceId) ?? [];
+    if (!list.some((e) => e.id === entry.id)) list.push({ ...entry });
+    this.history.set(entry.workspaceId, list);
+  }
+
+  async loadHistory(workspaceId: string): Promise<SavedResultEntry[]> {
+    const list = this.history.get(workspaceId) ?? [];
+    return [...list]
+      .sort((a, b) => b.savedAt - a.savedAt)
+      .map((e) => ({ ...e }));
+  }
+
+  async deleteHistoryEntry(
+    workspaceId: string,
+    entryId: string,
+  ): Promise<void> {
+    const list = this.history.get(workspaceId);
+    if (list) {
+      this.history.set(
+        workspaceId,
+        list.filter((e) => e.id !== entryId),
+      );
+    }
   }
 }
 

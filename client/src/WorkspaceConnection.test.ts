@@ -124,6 +124,7 @@ function makeSnapshot(overrides?: {
       participants: overrides?.participants ?? [],
       artifact,
       messages: overrides?.messages ?? [],
+      history: [],
     },
   };
 }

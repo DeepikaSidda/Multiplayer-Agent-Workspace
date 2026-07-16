@@ -131,6 +131,7 @@ function successfulSnapshot(displayName: string): ServerToClientEvent {
         yjsState: "",
       },
       messages: [],
+      history: [],
     },
   };
 }

@@ -18,6 +18,7 @@ import type {
   ArtifactSnapshot,
   Message,
   Participant,
+  SavedResultEntry,
   Workspace,
 } from "@maw/shared";
 import type { WorkspaceCreation, WorkspaceStore } from "./WorkspaceStore.js";
@@ -33,7 +34,10 @@ export type StoreOperation =
   | "loadArtifact"
   | "upsertParticipant"
   | "removeParticipant"
-  | "loadParticipants";
+  | "loadParticipants"
+  | "saveHistoryEntry"
+  | "loadHistory"
+  | "deleteHistoryEntry";
 
 /** Error thrown when a failure is injected into a store operation. */
 export class InjectedPersistenceError extends Error {
@@ -143,5 +147,23 @@ export class FailureInjectingWorkspaceStore implements WorkspaceStore {
   async loadParticipants(workspaceId: string): Promise<Participant[]> {
     this.guard("loadParticipants");
     return this.inner.loadParticipants(workspaceId);
+  }
+
+  async saveHistoryEntry(entry: SavedResultEntry): Promise<void> {
+    this.guard("saveHistoryEntry");
+    return this.inner.saveHistoryEntry(entry);
+  }
+
+  async loadHistory(workspaceId: string): Promise<SavedResultEntry[]> {
+    this.guard("loadHistory");
+    return this.inner.loadHistory(workspaceId);
+  }
+
+  async deleteHistoryEntry(
+    workspaceId: string,
+    entryId: string,
+  ): Promise<void> {
+    this.guard("deleteHistoryEntry");
+    return this.inner.deleteHistoryEntry(workspaceId, entryId);
   }
 }
