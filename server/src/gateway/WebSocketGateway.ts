@@ -274,7 +274,11 @@ export class WebSocketGateway {
     this.attach(session, workspaceId);
 
     // Full state on join (Requirements 1.7, 8.5).
-    const snapshot = await this.buildSnapshot(workspaceId, joined.workspace);
+    const snapshot = await this.buildSnapshot(
+      workspaceId,
+      joined.workspace,
+      joined.participant.id,
+    );
     if (snapshot === null) {
       this.sendError(
         session,
@@ -520,33 +524,55 @@ export class WebSocketGateway {
       this.sendError(session, "INTERNAL_ERROR", "Could not save to history.");
       return;
     }
-    await this.broadcastHistory(workspaceId);
+    // History is private per user: only update the saver's own sessions.
+    await this.sendHistoryToParticipant(workspaceId, session.participantId);
   }
 
-  /** `deleteHistory`: delete a saved entry and broadcast the updated history. */
+  /** `deleteHistory`: delete the caller's saved entry, then refresh their list. */
   private async onDeleteHistory(session: Session, id: string): Promise<void> {
-    if (!session.workspaceId) {
+    if (!session.workspaceId || !session.participantId) {
       this.sendError(session, "MALFORMED_EVENT", "Join a workspace first.");
       return;
     }
     const workspaceId = session.workspaceId;
+    // Only allow deleting an entry the caller owns (private history).
+    const all = await this.store.loadHistory(workspaceId);
+    const target = all.find((e) => e.id === id);
+    if (!target || target.savedById !== session.participantId) {
+      // Nothing the caller owns; just re-send their current list.
+      await this.sendHistoryToParticipant(workspaceId, session.participantId);
+      return;
+    }
     try {
       await this.store.deleteHistoryEntry(workspaceId, id);
     } catch {
       this.sendError(session, "INTERNAL_ERROR", "Could not delete history entry.");
       return;
     }
-    await this.broadcastHistory(workspaceId);
+    await this.sendHistoryToParticipant(workspaceId, session.participantId);
   }
 
-  /** Load the current saved-result history and broadcast it to the room. */
-  private async broadcastHistory(workspaceId: string): Promise<void> {
-    const entries = await this.store.loadHistory(workspaceId);
-    this.broadcast(workspaceId, {
+  /**
+   * Send a participant their OWN saved-result history (private per user) to
+   * every session currently authenticated as that participant in the room.
+   */
+  private async sendHistoryToParticipant(
+    workspaceId: string,
+    participantId: string,
+  ): Promise<void> {
+    const all = await this.store.loadHistory(workspaceId);
+    const entries = all.filter((e) => e.savedById === participantId);
+    const room = this.rooms.get(workspaceId);
+    if (!room) return;
+    const event: ServerToClientEvent = {
       type: "historyUpdated",
       workspaceId,
       payload: { entries },
-    });
+    };
+    const serialized = JSON.stringify(event);
+    for (const s of room) {
+      if (s.participantId === participantId) s.connection.send(serialized);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -703,6 +729,7 @@ export class WebSocketGateway {
   private async buildSnapshot(
     workspaceId: string,
     workspace: Workspace,
+    participantId: string,
   ): Promise<WorkspaceSnapshotPayload | null> {
     const artifactSnapshot = await this.store.loadArtifact(workspaceId);
     if (artifactSnapshot === null) return null;
@@ -730,7 +757,10 @@ export class WebSocketGateway {
       };
     });
     const messages: Message[] = await this.store.loadMessages(workspaceId);
-    const history = await this.store.loadHistory(workspaceId);
+    // History is private per user: only the joining participant's own entries.
+    const history = (await this.store.loadHistory(workspaceId)).filter(
+      (e) => e.savedById === participantId,
+    );
 
     // Prefer the authoritative in-memory content (warmed via ensureRoom); fall
     // back to the persisted snapshot content if the room is somehow unloaded.

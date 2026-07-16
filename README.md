@@ -16,7 +16,7 @@ Unlike a normal chatbot, the AI is a **first-class participant**: it joins the s
 - **AI teammates** — add an agent powered by **Amazon Bedrock — Nova Pro** (`amazon.nova-pro-v1:0`), give it a role (Product Manager, Engineer, Designer, Critic, Researcher), and `@mention` it. It answers with the full context of the room.
 - **Shared result, co-created live** — humans and agents build one shared result together (a Yjs CRDT), so simultaneous edits merge without losing anyone's work. A **Keep / Revert** banner appears when an agent contributes.
 - **Chat vs. result, kept separate** — questions and brainstorming stay in chat; explicit "write / update" requests shape the shared result.
-- **Save to history & Clear** — snapshot the current result into a per-workspace history, clear the panel so the agent's next answer starts fresh, and restore any past version later.
+- **Save to history & Clear** — snapshot the current result into your own durable history (stored server-side, private to you and keyed to your participant id), clear the panel so the agent's next answer starts fresh, and restore any past version later.
 - **Export** — download the final result as **PDF** or **Markdown**.
 - **Durable by default** — everything (participants, chat, shared result) persists in **DynamoDB**. Messages are keyed by a unique id with a no-overwrite write guard, so history is never lost across reconnects, restarts, or redeploys.
 - **Easy invites & auto-rejoin** — share one link; invitees just enter a name to join, and a refresh rejoins them automatically as the same participant (no duplicates).
