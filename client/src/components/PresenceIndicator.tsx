@@ -58,6 +58,12 @@ export function PresenceIndicator({
                 {isAgent ? "🤖" : "🧑"}
               </span>
               <span className="presence-name">{participant.displayName}</span>
+              <span
+                className="presence-id"
+                title={`Participant ID: ${participant.id}`}
+              >
+                #{participant.id.slice(0, 6)}
+              </span>
               {isProcessing && (
                 <span className="presence-processing" aria-hidden="true">
                   generating…
