@@ -16,9 +16,11 @@ Unlike a normal chatbot, the AI is a **first-class participant**: it joins the s
 - **AI teammates** — add an agent powered by **Amazon Bedrock — Nova Pro** (`amazon.nova-pro-v1:0`), give it a role (Product Manager, Engineer, Designer, Critic, Researcher), and `@mention` it. It answers with the full context of the room.
 - **Shared result, co-created live** — humans and agents build one shared result together (a Yjs CRDT), so simultaneous edits merge without losing anyone's work. A **Keep / Revert** banner appears when an agent contributes.
 - **Chat vs. result, kept separate** — questions and brainstorming stay in chat; explicit "write / update" requests shape the shared result.
+- **Save to history & Clear** — snapshot the current result into a per-workspace history, clear the panel so the agent's next answer starts fresh, and restore any past version later.
 - **Export** — download the final result as **PDF** or **Markdown**.
-- **Durable by default** — everything (participants, chat, shared result) persists in **DynamoDB**, so nothing is lost across reconnects, restarts, or redeploys.
-- **Easy invites** — share one link; invitees just enter a name to join, and a refresh rejoins them automatically without duplicates.
+- **Durable by default** — everything (participants, chat, shared result) persists in **DynamoDB**. Messages are keyed by a unique id with a no-overwrite write guard, so history is never lost across reconnects, restarts, or redeploys.
+- **Easy invites & auto-rejoin** — share one link; invitees just enter a name to join, and a refresh rejoins them automatically as the same participant (no duplicates).
+- **Plain-text results** — agents write the shared result in clean plain text (no stray Markdown), so it reads and exports cleanly.
 
 ## How it works (at a glance)
 
@@ -28,6 +30,8 @@ There are two areas in a workspace:
 - **Shared result** — the thing you're actually building together, and what you export at the end.
 
 Say things like *"suggest…"* or *"what do you think"* to keep it in chat. Say *"write…"*, *"update it"*, or *"replace it with…"* to have the agent shape the shared result.
+
+At the top of the shared result you can **Save to history** (keep the current version), **Clear** (start a fresh result), and open **History** to preview, restore, or delete past versions. Finish by exporting to **PDF** or **Markdown**.
 
 ## Screenshots
 
