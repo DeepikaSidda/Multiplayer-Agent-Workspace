@@ -231,6 +231,9 @@ export class DynamoWorkspaceStore implements WorkspaceStore {
           KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
           ExpressionAttributeValues: { ":pk": wsPk(workspaceId), ":prefix": prefix },
           ExclusiveStartKey: lastKey,
+          // Strongly consistent so a join snapshot always reflects the latest
+          // committed messages/participants (no eventual-consistency lag).
+          ConsistentRead: true,
         }),
       );
       if (result.Items) items.push(...result.Items);

@@ -117,6 +117,23 @@ export interface WorkspaceConnectionOptions {
 const defaultSocketFactory: SocketFactory = (url) =>
   new WebSocket(url) as unknown as ClientSocket;
 
+/**
+ * Union two message lists by id (later list wins on conflict) and return them
+ * ordered by ascending `(timestamp, sequence)`. Used so a fresh snapshot never
+ * drops messages the client already received.
+ */
+function mergeMessagesById(
+  existing: readonly Message[],
+  incoming: readonly Message[],
+): Message[] {
+  const byId = new Map<string, Message>();
+  for (const m of existing) byId.set(m.id, m);
+  for (const m of incoming) byId.set(m.id, m);
+  return [...byId.values()].sort((a, b) =>
+    a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.sequence - b.sequence,
+  );
+}
+
 export class WorkspaceConnection {
   // --- configuration ------------------------------------------------------
   private readonly url: string;
@@ -383,7 +400,10 @@ export class WorkspaceConnection {
         this.applyRemoteArtifactUpdate(event.payload.yjsUpdate);
         break;
       case "messageAppended":
-        this.messages = [...this.messages, event.payload.message];
+        // Ignore a message we already have (e.g. echoed after a resync).
+        if (!this.messages.some((m) => m.id === event.payload.message.id)) {
+          this.messages = [...this.messages, event.payload.message];
+        }
         break;
       case "agentAdded":
         this.upsertParticipant(event.payload.participant);
@@ -415,7 +435,10 @@ export class WorkspaceConnection {
     this.workspace = payload.workspace;
     this.workspaceId = payload.workspace.id;
     this.participants = [...payload.participants];
-    this.messages = [...payload.messages];
+    // Merge (union by id) the snapshot's messages with any already on screen so
+    // a reconnect/rejoin can never drop a message the client has already seen.
+    // Ordered by (timestamp, sequence) to match the server's total order.
+    this.messages = mergeMessagesById(this.messages, payload.messages);
 
     const { yjsState, ...meta } = payload.artifact;
     this.artifactMeta = meta;
