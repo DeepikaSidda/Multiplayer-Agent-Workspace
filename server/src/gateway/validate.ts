@@ -95,6 +95,16 @@ function validatePayload(
     case "export":
       return { type, workspaceId, payload: {} };
 
+    case "saveHistory":
+      return isString(payload.content)
+        ? { type, workspaceId, payload: { content: payload.content } }
+        : null;
+
+    case "deleteHistory":
+      return isString(payload.id)
+        ? { type, workspaceId, payload: { id: payload.id } }
+        : null;
+
     default:
       // Unknown event type.
       return null;
